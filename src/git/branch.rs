@@ -415,6 +415,11 @@ pub fn has_conflicts(repo: &Repo) -> bool {
 
 /// Create branch `name` at `start` (empty = HEAD), optionally checking it out; `overwrite` resets an
 /// existing branch of that name (`checkout -B` / `branch -f`).
+///
+/// The new branch never tracks its start point (`--no-track`): by default git makes a remote start
+/// such as `origin/main` the upstream, so the first push would go to `origin/main` instead of
+/// publishing the branch under its own name. Without an upstream, push creates
+/// `<remote>/<name>` and sets that as upstream. An overwritten branch keeps its own upstream.
 pub fn create_branch_with(
     repo: &Repo,
     name: &str,
@@ -427,10 +432,10 @@ pub fn create_branch_with(
         bail!("a branch named '{name}' already exists");
     }
     let mut args: Vec<&str> = match (checkout_after, overwrite) {
-        (true, false) => vec!["checkout", "-b", name],
-        (true, true) => vec!["checkout", "-B", name],
-        (false, false) => vec!["branch", name],
-        (false, true) => vec!["branch", "-f", name],
+        (true, false) => vec!["checkout", "--no-track", "-b", name],
+        (true, true) => vec!["checkout", "--no-track", "-B", name],
+        (false, false) => vec!["branch", "--no-track", name],
+        (false, true) => vec!["branch", "--no-track", "-f", name],
     };
     if !start.is_empty() {
         args.push(start);
@@ -962,6 +967,31 @@ refs/heads/feature/x y\0 \0\0\0def5678\x001700000001\0\0\0wip\n";
         create_branch_with(&repo, "x", &first, true, true).unwrap();
         assert_eq!(repo.head_branch().as_deref(), Some("x"));
         assert_eq!(repo.head_commit().unwrap(), first);
+    }
+
+    #[test]
+    fn new_branch_from_remote_branch_does_not_track_it() {
+        let (_d, repo) = temp_repo();
+        commit_files(&repo, &[("a.txt", "1\n")], "first");
+        repo.run(&["remote", "add", "origin", "."]).unwrap();
+        repo.run(&["update-ref", "refs/remotes/origin/main", "HEAD"])
+            .unwrap();
+        let upstream =
+            |b: &str| repo.try_run(&["rev-parse", "--abbrev-ref", &format!("{b}@{{upstream}}")]);
+        // Plain git would set origin/main as upstream, so the first push would go there.
+        create_branch_with(&repo, "feature", "origin/main", true, false).unwrap();
+        assert_eq!(repo.head_branch().as_deref(), Some("feature"));
+        assert_eq!(upstream("feature"), None);
+        create_branch_with(&repo, "other", "origin/main", false, false).unwrap();
+        assert_eq!(upstream("other"), None);
+        // Overwriting keeps the branch's own upstream.
+        repo.run(&["branch", "--set-upstream-to=origin/main", "other"])
+            .unwrap();
+        create_branch_with(&repo, "other", "HEAD", false, true).unwrap();
+        assert_eq!(
+            upstream("other").as_deref().map(str::trim),
+            Some("origin/main")
+        );
     }
 
     #[test]

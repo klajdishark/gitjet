@@ -7,6 +7,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Tabs load in the background: Changes, Branches, Conflicts, Shelf, Files and Repository no
+  longer freeze the screen while git runs (50–150 ms per git command on Windows). The status bar
+  shows a spinner ("Loading Changes") and panes show "Loading…" until data arrives.
+- Diff previews (Changes, Shelf) and branch details load once the selection rests, so holding an
+  arrow key no longer runs git for every row.
+- Refresh requests are combined (one refresh per screen update), and returning to the terminal
+  window refreshes at most once a second.
+- Submodule init / sync / deinit, aborting a rebase and "Get revision" in file history run in the
+  background with a spinner.
+- Creating a branch runs in the background: the New branch dialog shows each step ("Creating
+  feature and switching to it…") with a spinner and elapsed time, and errors stay inline.
+
+### Fixed
+
+- A branch created from a remote branch (for example from `origin/main`) no longer tracks it, so
+  its first push publishes it under its own name instead of pushing to `origin/main`. The dialog
+  says so. Overwriting an existing branch keeps that branch's upstream.
+
+### Added
+
+- `GITJET_TRACE=<file>` logs every git command with its duration and whether the screen waited
+  for it.
+- `GITJET_GIT=<path>` selects the git executable (skips package manager shims on Windows).
+
 ## [0.1.1] - 2026-10-27
 
 ### Changed

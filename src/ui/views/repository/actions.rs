@@ -508,13 +508,17 @@ fn submodule_items(data: &Data, idx: Option<usize>, ctx: &Ctx) -> Vec<MenuItem> 
     let p1 = path.clone();
     vec![
         MenuItem::new("Open submodule", "Enter", move |_| Action::SwitchRepo(abs)).enabled(initialized),
-        MenuItem::new("Init", "i", |ctx| {
-            Action::from_result(admin::submodule_init(&ctx.repo), "Submodules initialized")
+        MenuItem::new("Init", "i", |_| {
+            Action::spawn("Init submodules", |repo| {
+                admin::submodule_init(repo).map(|_| "Submodules initialized".into())
+            })
         })
         .enabled(any),
         MenuItem::new("Update (init, recursive)", "u", |_| update_submodules()).enabled(any),
-        MenuItem::new("Sync URLs", "s", |ctx| {
-            Action::from_result(admin::submodule_sync(&ctx.repo), "Submodule URLs synchronized")
+        MenuItem::new("Sync URLs", "s", |_| {
+            Action::spawn("Sync submodule URLs", |repo| {
+                admin::submodule_sync(repo).map(|_| "Submodule URLs synchronized".into())
+            })
         })
         .enabled(any),
         MenuItem::new("Add submodule…", "n", |_| add_submodule()),
@@ -523,8 +527,10 @@ fn submodule_items(data: &Data, idx: Option<usize>, ctx: &Ctx) -> Vec<MenuItem> 
                 ConfirmPopup::new(
                     "Deinit submodule",
                     format!("Unregister {p1} and remove its work tree? Local changes inside it are lost."),
-                    move |ctx| {
-                        Action::from_result(admin::submodule_deinit(&ctx.repo, &p1), format!("Deinitialized {p1}"))
+                    move |_| {
+                        Action::spawn("Deinit submodule", move |repo| {
+                            admin::submodule_deinit(repo, &p1).map(|_| format!("Deinitialized {p1}"))
+                        })
                     },
                 )
                 .danger(),

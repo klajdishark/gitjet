@@ -80,8 +80,7 @@ struct Data {
 }
 
 impl Data {
-    fn load(ctx: &Ctx) -> Data {
-        let repo = &ctx.repo;
+    fn load(repo: &crate::git::Repo) -> Data {
         let mut errors: [Option<String>; 6] = Default::default();
         fn grab<T>(
             errors: &mut [Option<String>; 6],
@@ -181,6 +180,7 @@ enum Focus {
 
 pub struct RepositoryView {
     data: Data,
+    loader: crate::ui::bg::Background<Data>,
     section: Section,
     focus: Focus,
     sel: [usize; 6],
@@ -190,11 +190,20 @@ pub struct RepositoryView {
 }
 
 impl RepositoryView {
+    /// Apply a finished refresh.
+    fn apply_loaded(&mut self) {
+        if let Some(data) = self.loader.poll() {
+            self.data = data;
+            self.clamp_selection();
+        }
+    }
+
     pub fn new(ctx: &Ctx) -> Self {
         // Runs at startup and after every repository switch: keeps the recent list current.
         let _ = admin::record_recent(&ctx.repo.root);
         Self {
             data: Data::default(),
+            loader: crate::ui::bg::Background::new(),
             section: Section::Tags,
             focus: Focus::Sections,
             sel: [0; 6],
@@ -792,9 +801,17 @@ impl View for RepositoryView {
     }
 
     fn refresh(&mut self, ctx: &Ctx) -> anyhow::Result<()> {
-        self.data = Data::load(ctx);
-        self.clamp_selection();
+        self.loader.start(&ctx.repo, Data::load);
+        self.apply_loaded();
         Ok(())
+    }
+
+    fn poll(&mut self, _ctx: &Ctx) {
+        self.apply_loaded();
+    }
+
+    fn loading(&self) -> bool {
+        self.loader.busy()
     }
 
     fn draw(&mut self, f: &mut Frame, area: Rect, ctx: &Ctx) {
@@ -987,6 +1004,7 @@ mod tests {
     fn blank_view() -> RepositoryView {
         RepositoryView {
             data: Data::default(),
+            loader: crate::ui::bg::Background::new(),
             section: Section::Tags,
             focus: Focus::Sections,
             sel: [0; 6],
@@ -1122,6 +1140,7 @@ mod tests {
         };
         let mut v = RepositoryView {
             data,
+            loader: crate::ui::bg::Background::new(),
             section: Section::Tags,
             focus: Focus::Content,
             sel: [0; 6],

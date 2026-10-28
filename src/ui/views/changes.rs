@@ -9,6 +9,8 @@ mod partial_popup;
 mod tree;
 
 use std::collections::{BTreeSet, HashSet};
+use std::path::PathBuf;
+use std::time::Duration;
 
 use ratatui::crossterm::event::{
     KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -31,6 +33,7 @@ use crate::git::diff::{DiffOptions, FileDiff, Hunk};
 use crate::git::status::{FileState, Status, StatusEntry};
 use crate::git::Repo;
 use crate::theme::Theme;
+use crate::ui::bg::{Background, Preview};
 use crate::ui::diff_view::{self, DiffSource};
 use crate::ui::popups::{ConfirmPopup, InputPopup, MenuItem, MenuPopup};
 use crate::ui::widgets::{move_sel, panel, scroll_to_keep_visible, TextInput};
@@ -39,6 +42,70 @@ use crate::util::truncate;
 
 /// Maximum number of diff lines kept for the inline preview (Enter shows everything).
 const PREVIEW_CAP: usize = 4000;
+
+/// How long the selection must rest on a file before its diff loads (holding an arrow key skips files).
+const PREVIEW_DELAY: Duration = Duration::from_millis(60);
+
+/// What a refresh loads off the UI thread.
+struct Loaded {
+    status: Status,
+    lists: Changelists,
+    /// Set when the changelists were adjusted to the work tree and must be saved.
+    lists_changed: bool,
+    /// Where a damaged changelist file was moved.
+    backup: Option<PathBuf>,
+}
+
+fn load_changes(repo: &Repo) -> anyhow::Result<Loaded> {
+    let mut status = repo.status()?;
+    status.entries.retain(|e| !e.is_ignored());
+    let (mut lists, backup) = Changelists::load_checked(repo)?;
+    let tracked: Vec<String> = status
+        .entries
+        .iter()
+        .filter(|e| !e.is_untracked())
+        .map(|e| e.path.clone())
+        .collect();
+    let lists_changed = lists.sync(&tracked);
+    Ok(Loaded {
+        status,
+        lists,
+        lists_changed,
+        backup,
+    })
+}
+
+/// Diff of `e` shown in the preview, capped at [`PREVIEW_CAP`] lines (`true` when cut).
+type PreviewData = Result<(Vec<FileDiff>, bool), String>;
+
+fn load_preview(
+    repo: &Repo,
+    e: &StatusEntry,
+    mode: PreviewMode,
+    opts: &DiffOptions,
+) -> PreviewData {
+    let mut paths = vec![e.path.clone()];
+    if let Some(o) = &e.orig_path {
+        paths.push(o.clone());
+    }
+    let res = if e.is_untracked() {
+        match mode {
+            PreviewMode::Staged => Ok(Vec::new()),
+            _ => repo.untracked_diff(&e.path).map(|d| vec![d]),
+        }
+    } else {
+        match mode {
+            PreviewMode::Local => repo.diff_local(&paths, opts),
+            PreviewMode::Unstaged => repo.diff_unstaged(&paths, opts),
+            PreviewMode::Staged => repo.diff_staged(&paths, opts),
+        }
+    };
+    res.map(|mut d| {
+        let cut = cap_diff(&mut d, PREVIEW_CAP);
+        (d, cut)
+    })
+    .map_err(|e| format!("{e:#}"))
+}
 
 /// Which diff the preview shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,8 +165,16 @@ pub struct ChangesView {
     filtering: bool,
     focus: Pane,
     mode: PreviewMode,
+    loader: Background<Result<Loaded, String>>,
+    /// Why the last refresh failed (shown above the list until the next one succeeds).
+    load_error: Option<String>,
+    previews: Preview<(String, PreviewMode), PreviewData>,
     preview: Vec<FileDiff>,
+    /// The diff the selection wants, and the one `preview` is up to date with.
     preview_key: Option<(String, PreviewMode)>,
+    preview_shown: Option<(String, PreviewMode)>,
+    /// File whose diff `preview` holds (kept on screen while the same file reloads).
+    preview_path: Option<String>,
     preview_truncated: bool,
     preview_scroll: usize,
     preview_height: usize,
@@ -125,8 +200,13 @@ impl ChangesView {
             filtering: false,
             focus: Pane::List,
             mode: PreviewMode::Local,
+            loader: Background::new(),
+            load_error: None,
+            previews: Preview::new(PREVIEW_DELAY, 32),
             preview: Vec::new(),
             preview_key: None,
+            preview_shown: None,
+            preview_path: None,
             preview_truncated: false,
             preview_scroll: 0,
             preview_height: 0,
@@ -222,48 +302,91 @@ impl ChangesView {
 
     // ----- preview -----------------------------------------------------------------------------
 
+    /// Request the selected file's diff if the selection or mode changed, and show it once loaded.
     fn update_preview(&mut self, ctx: &Ctx) {
         let Some(e) = self.selected_entry().cloned() else {
             self.preview.clear();
             self.preview_key = None;
+            self.preview_shown = None;
+            self.preview_path = None;
             self.preview_error = None;
             return;
         };
         let key = (e.path.clone(), self.mode);
-        if self.preview_key.as_ref() == Some(&key) {
+        if self.preview_key.as_ref() != Some(&key) {
+            self.preview_key = Some(key.clone());
+            let opts = DiffOptions::from_config(&ctx.config.diff);
+            let mode = self.mode;
+            self.previews.request(&ctx.repo, key.clone(), move |repo| {
+                load_preview(repo, &e, mode, &opts)
+            });
+        }
+        if self.preview_shown.as_ref() == Some(&key) {
             return;
         }
-        self.preview_key = Some(key);
-        self.preview_scroll = 0;
-        let opts = DiffOptions::from_config(&ctx.config.diff);
-        let repo = &ctx.repo;
-        let mut paths = vec![e.path.clone()];
-        if let Some(o) = &e.orig_path {
-            paths.push(o.clone());
-        }
-        let res = if e.is_untracked() {
-            match self.mode {
-                PreviewMode::Staged => Ok(Vec::new()),
-                _ => repo.untracked_diff(&e.path).map(|d| vec![d]),
-            }
-        } else {
-            match self.mode {
-                PreviewMode::Local => repo.diff_local(&paths, &opts),
-                PreviewMode::Unstaged => repo.diff_unstaged(&paths, &opts),
-                PreviewMode::Staged => repo.diff_staged(&paths, &opts),
-            }
+        let Some(res) = self.previews.get(&key) else {
+            return;
         };
+        if self.preview_path.as_ref() != Some(&key.0) {
+            self.preview_scroll = 0;
+            self.preview_path = Some(key.0.clone());
+        }
+        self.preview_shown = Some(key);
         match res {
-            Ok(mut d) => {
-                self.preview_truncated = cap_diff(&mut d, PREVIEW_CAP);
+            Ok((d, cut)) => {
                 self.preview = d;
+                self.preview_truncated = cut;
                 self.preview_error = None;
             }
             Err(err) => {
                 self.preview.clear();
-                self.preview_error = Some(format!("{err:#}"));
+                self.preview_truncated = false;
+                self.preview_error = Some(err);
             }
         }
+    }
+
+    /// True while the selected file's diff is still loading.
+    fn preview_loading(&self) -> bool {
+        self.preview_key.is_some() && self.preview_shown != self.preview_key
+    }
+
+    /// Apply a finished refresh.
+    fn apply_loaded(&mut self, ctx: &Ctx) {
+        let Some(res) = self.loader.poll() else {
+            return;
+        };
+        let loaded = match res {
+            Ok(l) => l,
+            Err(e) => {
+                self.load_error = Some(e);
+                return;
+            }
+        };
+        self.load_error = None;
+        if let Some(b) = loaded.backup {
+            self.notice = Some(format!(
+                "The changelist file was damaged and has been reset; the old file is saved as {} (Esc to dismiss)",
+                b.display()
+            ));
+        }
+        if loaded.lists_changed {
+            if let Err(e) = loaded.lists.save(&ctx.repo) {
+                self.load_error = Some(format!("{e:#}"));
+            }
+        }
+        let key = self.selected_row().map(|r| self.row_key(r));
+        let status = loaded.status;
+        let present: HashSet<&str> = status.entries.iter().map(|e| e.path.as_str()).collect();
+        self.marked.retain(|p| present.contains(p.as_str()));
+        self.status = status;
+        self.lists = loaded.lists;
+        self.rebuild(key);
+        // The work tree changed: reload the diff, keeping the old one on screen until it arrives.
+        self.previews.invalidate();
+        self.preview_key = None;
+        self.preview_shown = None;
+        self.update_preview(ctx);
     }
 
     fn scroll_preview(&mut self, delta: isize) {
@@ -291,15 +414,20 @@ impl ChangesView {
         let inner = block.inner(area);
         f.render_widget(block, area);
         let show_filter = self.filtering || !self.filter.is_empty();
+        let notice = self
+            .load_error
+            .as_ref()
+            .map(|e| (e, t.error))
+            .or(self.notice.as_ref().map(|n| (n, t.warning)));
         let [notice_area, filter_area, list] = Layout::vertical([
-            Constraint::Length(u16::from(self.notice.is_some())),
+            Constraint::Length(u16::from(notice.is_some())),
             Constraint::Length(u16::from(show_filter)),
             Constraint::Min(1),
         ])
         .areas(inner);
-        if let Some(n) = &self.notice {
+        if let Some((n, color)) = notice {
             f.render_widget(
-                Line::styled(n.clone(), Style::default().fg(t.warning)),
+                Line::styled(n.clone(), Style::default().fg(color)),
                 notice_area,
             );
         }
@@ -441,7 +569,9 @@ impl ChangesView {
             f.render_widget(Paragraph::new(text).style(t.dimmed()), body);
             return;
         }
-        if let Some(e) = &self.preview_error {
+        if self.preview_loading() && self.preview_path != path {
+            f.render_widget(Paragraph::new("Loading…").style(t.dimmed()), body);
+        } else if let Some(e) = &self.preview_error {
             f.render_widget(
                 Paragraph::new(e.as_str()).style(Style::default().fg(t.error)),
                 body,
@@ -1515,33 +1645,20 @@ impl View for ChangesView {
     }
 
     fn refresh(&mut self, ctx: &Ctx) -> anyhow::Result<()> {
-        let key = self.selected_row().map(|r| self.row_key(r));
-        let mut status = ctx.repo.status()?;
-        status.entries.retain(|e| !e.is_ignored());
-        let (mut lists, backup) = Changelists::load_checked(&ctx.repo)?;
-        if let Some(b) = backup {
-            self.notice = Some(format!(
-                "The changelist file was damaged and has been reset; the old file is saved as {} (Esc to dismiss)",
-                b.display()
-            ));
-        }
-        let tracked: Vec<String> = status
-            .entries
-            .iter()
-            .filter(|e| !e.is_untracked())
-            .map(|e| e.path.clone())
-            .collect();
-        if lists.sync(&tracked) {
-            lists.save(&ctx.repo)?;
-        }
-        let present: HashSet<&str> = status.entries.iter().map(|e| e.path.as_str()).collect();
-        self.marked.retain(|p| present.contains(p.as_str()));
-        self.status = status;
-        self.lists = lists;
-        self.rebuild(key);
-        self.preview_key = None;
-        self.update_preview(ctx);
+        self.loader.start(&ctx.repo, |repo| {
+            load_changes(repo).map_err(|e| format!("{e:#}"))
+        });
+        self.apply_loaded(ctx);
         Ok(())
+    }
+
+    fn poll(&mut self, ctx: &Ctx) {
+        self.apply_loaded(ctx);
+        self.update_preview(ctx);
+    }
+
+    fn loading(&self) -> bool {
+        self.loader.busy()
     }
 
     fn draw(&mut self, f: &mut Frame, area: Rect, ctx: &Ctx) {

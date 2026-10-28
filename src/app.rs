@@ -24,7 +24,10 @@ use crate::ui::popups::{MenuItem, MenuPopup, MessagePopup};
 use crate::ui::views::{self, Tab};
 use crate::ui::{KeyHelp, Popup, View};
 
-const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+pub const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/// Terminals report focus changes often (every Alt+Tab); a refresh this recent makes another redundant.
+const FOCUS_REFRESH_MIN_GAP: Duration = Duration::from_secs(1);
 
 const GLOBAL_HELP: [KeyHelp; 7] = [
     ("1-9", "switch tab"),
@@ -94,8 +97,12 @@ pub struct App {
     rx: Receiver<TaskDone>,
     next_task: u64,
     followups: std::collections::HashMap<u64, crate::action::Then>,
-    /// Conflict count seen at the previous refresh, to switch to the Conflicts tab when new ones appear.
-    had_conflicts: bool,
+    /// Whether conflicts were seen last time (None until the first load), to switch to the
+    /// Conflicts tab when new ones appear.
+    had_conflicts: Option<bool>,
+    /// Set by `Action::Refresh`; the refresh runs once per loop pass, however often it was asked for.
+    refresh_pending: bool,
+    last_refresh: Instant,
     pending_suspend: Option<Command>,
     quit: bool,
     head: HeadInfo,
@@ -148,7 +155,9 @@ impl App {
             rx,
             next_task: 0,
             followups: std::collections::HashMap::new(),
-            had_conflicts: false,
+            had_conflicts: None,
+            refresh_pending: false,
+            last_refresh: Instant::now(),
             pending_suspend: None,
             quit: false,
             head: HeadInfo::default(),
@@ -164,7 +173,6 @@ impl App {
         app.ensure_fresh(0);
         app.ensure_fresh(Tab::Conflicts.index());
         app.maintain_repo();
-        app.had_conflicts = app.views[Tab::Conflicts.index()].badge().is_some();
         app
     }
 
@@ -177,7 +185,11 @@ impl App {
                     match event::read()? {
                         Event::Key(k) if k.kind != KeyEventKind::Release => self.on_key(k),
                         Event::Mouse(m) => self.on_mouse(m),
-                        Event::FocusGained => self.apply(Action::Refresh),
+                        Event::FocusGained => {
+                            if self.last_refresh.elapsed() >= FOCUS_REFRESH_MIN_GAP {
+                                self.apply(Action::Refresh);
+                            }
+                        }
                         Event::Paste(s) => {
                             for c in s.chars() {
                                 self.on_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
@@ -192,6 +204,9 @@ impl App {
                 }
             }
             self.poll_tasks();
+            if std::mem::take(&mut self.refresh_pending) {
+                self.refresh_all();
+            }
             self.tick();
             if let Some(mut cmd) = self.pending_suspend.take() {
                 leave(mouse);
@@ -218,7 +233,7 @@ impl App {
     fn apply(&mut self, action: Action) {
         match action {
             Action::None => {}
-            Action::Refresh => self.refresh_all(),
+            Action::Refresh => self.refresh_pending = true,
             Action::SwitchTab(t) => self.switch_tab(t.index()),
             Action::Popup(p) => self.popups.push(p),
             Action::ClosePopup => {
@@ -254,8 +269,10 @@ impl App {
                     self.views = views::build(&self.ctx);
                     self.dirty = vec![true; self.views.len()];
                     self.popups.clear();
+                    self.had_conflicts = None;
                     self.refresh_head();
                     self.ensure_fresh(self.active);
+                    self.ensure_fresh(Tab::Conflicts.index());
                     self.maintain_repo();
                     let name = self.ctx.repo.name();
                     self.apply(Action::Toast(format!("Opened {name}")));
@@ -352,6 +369,10 @@ impl App {
                 then: None,
             });
         }
+        for v in self.views.iter_mut() {
+            v.poll(&self.ctx);
+        }
+        self.watch_conflicts();
         let mut polled = Vec::new();
         for p in self.popups.iter_mut() {
             polled.push(p.poll(&self.ctx));
@@ -379,6 +400,7 @@ impl App {
     }
 
     fn refresh_all(&mut self) {
+        self.last_refresh = Instant::now();
         self.dirty.iter_mut().for_each(|d| *d = true);
         self.refresh_head();
         self.ensure_fresh(self.active);
@@ -390,13 +412,23 @@ impl App {
         for p in self.popups.iter_mut() {
             p.refresh(&self.ctx);
         }
-        // Bring up the conflicts as soon as an operation stops on them.
-        let has_conflicts = self.views[conflicts].badge().is_some();
-        if has_conflicts && !self.had_conflicts && self.active != conflicts {
+    }
+
+    /// Bring up the conflicts as soon as an operation stops on them. The Conflicts tab loads in the
+    /// background, so this checks its badge whenever it is not loading; the first load only sets
+    /// the baseline (conflicts that were already there when gitjet started don't switch tabs).
+    fn watch_conflicts(&mut self) {
+        let conflicts = Tab::Conflicts.index();
+        let view = &self.views[conflicts];
+        if view.loading() {
+            return;
+        }
+        let has_conflicts = view.badge().is_some();
+        if has_conflicts && self.had_conflicts == Some(false) && self.active != conflicts {
             self.switch_tab(conflicts);
             self.apply(Action::Toast("Conflicts need resolving".into()));
         }
-        self.had_conflicts = has_conflicts;
+        self.had_conflicts = Some(has_conflicts);
     }
 
     fn ensure_fresh(&mut self, i: usize) {
@@ -649,13 +681,17 @@ impl App {
             let first = toast.text.lines().next().unwrap_or("");
             left.push(Span::styled(format!(" {first}"), style));
         }
-        let right = if self.running.is_empty() {
+        let mut busy = self.running.clone();
+        if self.views[self.active].loading() {
+            busy.push(format!("Loading {}", self.views[self.active].title()));
+        }
+        let right = if busy.is_empty() {
             String::new()
         } else {
             format!(
                 "{} {} ",
                 SPINNER[self.ticks % SPINNER.len()],
-                self.running.join(", ")
+                busy.join(", ")
             )
         };
         let rw = unicode_width::UnicodeWidthStr::width(right.as_str()) as u16;

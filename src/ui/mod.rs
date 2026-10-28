@@ -24,6 +24,8 @@ pub type KeyHelp = (&'static str, &'static str);
 pub trait View {
     fn title(&self) -> String;
     /// Reload data from git. Called on first show and after every `Action::Refresh` (lazily for hidden tabs).
+    /// Slow loads should start a [`bg::Background`] job here and apply its result in [`poll`](View::poll),
+    /// so the UI never waits on git.
     fn refresh(&mut self, ctx: &Ctx) -> anyhow::Result<()>;
     fn draw(&mut self, f: &mut Frame, area: Rect, ctx: &Ctx);
     fn handle_key(&mut self, key: KeyEvent, ctx: &Ctx) -> Action;
@@ -42,6 +44,12 @@ pub trait View {
     /// Short badge in the tab title (e.g. number of conflicts).
     fn badge(&self) -> Option<String> {
         None
+    }
+    /// Called about ten times a second, visible or not: pick up results of background loads.
+    fn poll(&mut self, _ctx: &Ctx) {}
+    /// True while a background load started by `refresh` is running (shown as a spinner).
+    fn loading(&self) -> bool {
+        false
     }
 }
 

@@ -1,4 +1,12 @@
 //! "New branch" dialog: name field plus "Checkout branch" / "Overwrite existing branch" checkboxes.
+//!
+//! Creating runs in the background (checking out a branch rewrites the work tree, which can take
+//! seconds); the dialog shows each step with a spinner and keeps errors inline.
+
+use std::cell::Cell;
+use std::rc::Rc;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::time::Instant;
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -10,6 +18,7 @@ use ratatui::Frame;
 use crate::action::Action;
 use crate::ctx::Ctx;
 use crate::git::branch::{self, Branch};
+use crate::git::Repo;
 use crate::ui::popups::ConfirmPopup;
 use crate::ui::widgets::{centered, panel, TextInput};
 use crate::ui::{KeyHelp, Popup};
@@ -45,11 +54,36 @@ impl Field {
 pub struct NewBranchPopup {
     /// Start point (empty = HEAD)
     start: String,
+    /// Set when `start` is a remote branch: the new branch does not track it (see
+    /// [`branch::create_branch_with`]), which the dialog explains.
+    from_remote: bool,
     input: TextInput,
     checkout: bool,
     overwrite: bool,
     focus: Field,
     error: Option<String>,
+    /// The create running in the background.
+    job: Option<Job>,
+    /// Request waiting for the overwrite confirmation, and the flag the confirmation sets.
+    awaiting: Option<CreateRequest>,
+    confirmed: Rc<Cell<bool>>,
+}
+
+/// What the background create reports back, in order.
+enum Progress {
+    /// The step now running, shown in the dialog.
+    Step(String),
+    /// Overwriting would leave `lost` commits (old tip) reachable only through the reflog: ask first.
+    WouldLose(u32, String),
+    /// Finished: the success message or the inline error.
+    Done(Result<String, String>),
+}
+
+struct Job {
+    rx: Receiver<Progress>,
+    step: String,
+    started: Instant,
+    req: CreateRequest,
 }
 
 impl NewBranchPopup {
@@ -61,15 +95,20 @@ impl NewBranchPopup {
             .unwrap_or_default();
         Self {
             start: start.map(|b| b.name.clone()).unwrap_or_default(),
+            from_remote: start.is_some_and(Branch::is_remote),
             input: TextInput::new(&initial),
             checkout: true,
             overwrite: false,
             focus: Field::Name,
             error: None,
+            job: None,
+            awaiting: None,
+            confirmed: Rc::new(Cell::new(false)),
         }
     }
 
-    /// Validate, then create the branch; overwriting a branch that would lose commits asks first.
+    /// Validate, then create the branch in the background; overwriting a branch that would lose
+    /// commits asks first.
     fn create(&mut self, ctx: &Ctx) -> Action {
         let name = self.input.value().trim().to_string();
         if name.is_empty() {
@@ -82,22 +121,30 @@ impl NewBranchPopup {
             checkout: self.checkout,
             overwrite: self.overwrite,
         };
-        if req.overwrite {
-            if let Some((lost, tip)) =
-                branch::commits_lost_by_reset(&ctx.repo, &req.name, &req.start)
-            {
-                if lost > 0 {
-                    return overwrite_confirm(req, lost, &tip);
-                }
-            }
+        self.start_job(ctx, req, true)
+    }
+
+    /// Start creating `req`; `check_lost` first looks for commits an overwrite would drop.
+    fn start_job(&mut self, ctx: &Ctx, req: CreateRequest, check_lost: bool) -> Action {
+        self.error = None;
+        self.awaiting = None;
+        self.confirmed.set(false);
+        let (tx, rx) = mpsc::channel();
+        let repo = ctx.repo.clone();
+        let job_req = req.clone();
+        let work = move || job_req.run(&repo, check_lost, &tx);
+        if cfg!(test) {
+            work();
+        } else {
+            std::thread::spawn(work);
         }
-        match req.run(ctx) {
-            Ok(a) => a,
-            Err(msg) => {
-                self.error = Some(msg);
-                Action::None
-            }
-        }
+        self.job = Some(Job {
+            rx,
+            step: "Starting…".into(),
+            started: Instant::now(),
+            req,
+        });
+        self.poll(ctx)
     }
 
     fn toggle(&mut self) {
@@ -120,45 +167,67 @@ struct CreateRequest {
 }
 
 impl CreateRequest {
-    /// Create the branch; on success close the dialog with a toast, else the inline error text.
-    fn run(&self, ctx: &Ctx) -> Result<Action, String> {
+    /// Runs on the background thread, reporting each step on `tx`.
+    fn run(&self, repo: &Repo, check_lost: bool, tx: &Sender<Progress>) {
+        let step = |s: String| {
+            let _ = tx.send(Progress::Step(s));
+        };
         let name = &self.name;
-        match branch::create_branch_with(
-            &ctx.repo,
-            name,
-            &self.start,
-            self.checkout,
-            self.overwrite,
-        ) {
-            Ok(()) => {
-                let from = if self.start.is_empty() {
-                    String::new()
-                } else {
-                    format!(" from {}", self.start)
-                };
-                let what = match (self.checkout, self.overwrite) {
-                    (true, true) => "Reset and checked out",
-                    (false, true) => "Reset",
-                    (true, false) => "Created and checked out",
-                    (false, false) => "Created",
-                };
-                Ok(Action::ClosePopup.then(done(format!("{what} branch {name}{from}"))))
-            }
-            Err(e) => {
-                let msg = format!("{e:#}");
-                Err(if msg.contains("already exists") {
-                    format!("{msg} — tick \"Overwrite existing branch\" to reset it")
-                } else {
-                    msg
-                })
+        if check_lost && self.overwrite {
+            step(format!("Checking for commits only on {name}…"));
+            if let Some((lost, tip)) = branch::commits_lost_by_reset(repo, name, &self.start) {
+                if lost > 0 {
+                    let _ = tx.send(Progress::WouldLose(lost, tip));
+                    return;
+                }
             }
         }
+        step(match (self.checkout, self.overwrite) {
+            (true, true) => format!("Resetting {name} and switching to it (updating files)…"),
+            (true, false) => format!("Creating {name} and switching to it (updating files)…"),
+            (false, true) => format!("Resetting {name}…"),
+            (false, false) => format!("Creating {name}…"),
+        });
+        let result =
+            branch::create_branch_with(repo, name, &self.start, self.checkout, self.overwrite)
+                .map(|()| self.success_message())
+                .map_err(|e| {
+                    let msg = format!("{e:#}");
+                    if msg.contains("already exists") {
+                        format!("{msg} — tick \"Overwrite existing branch\" to reset it")
+                    } else {
+                        msg
+                    }
+                });
+        let _ = tx.send(Progress::Done(result));
+    }
+
+    fn success_message(&self) -> String {
+        let name = &self.name;
+        let from = if self.start.is_empty() {
+            String::new()
+        } else {
+            format!(" from {}", self.start)
+        };
+        let what = match (self.checkout, self.overwrite) {
+            (true, true) => "Reset and checked out",
+            (false, true) => "Reset",
+            (true, false) => "Created and checked out",
+            (false, false) => "Created",
+        };
+        format!("{what} branch {name}{from}")
     }
 }
 
 /// Danger confirm before resetting an existing branch whose `lost` commits would become unreachable.
-/// Confirming closes the confirm and, on success, the dialog underneath; errors keep the dialog open.
-fn overwrite_confirm(req: CreateRequest, lost: u32, tip: &str) -> Action {
+/// Confirming sets `confirmed`; the dialog underneath then creates the branch (and closes on success,
+/// or shows the error).
+fn overwrite_confirm(
+    req: &CreateRequest,
+    lost: u32,
+    tip: &str,
+    confirmed: Rc<Cell<bool>>,
+) -> Action {
     let short: String = tip.chars().take(8).collect();
     let start = if req.start.is_empty() {
         "HEAD"
@@ -175,8 +244,9 @@ fn overwrite_confirm(req: CreateRequest, lost: u32, tip: &str) -> Action {
         req.name,
     );
     Action::popup(
-        ConfirmPopup::new("Overwrite existing branch", msg, move |ctx| {
-            req.run(ctx).unwrap_or_else(Action::Error)
+        ConfirmPopup::new("Overwrite existing branch", msg, move |_| {
+            confirmed.set(true);
+            Action::None
         })
         .danger(),
     )
@@ -247,11 +317,41 @@ impl Popup for NewBranchPopup {
             ),
             cb2,
         );
+        if let Some(job) = &self.job {
+            let frame = (job.started.elapsed().as_millis() / 100) as usize;
+            let secs = job.started.elapsed().as_secs();
+            let mut text = format!(
+                "{} {}",
+                crate::app::SPINNER[frame % crate::app::SPINNER.len()],
+                job.step
+            );
+            if secs >= 1 {
+                text.push_str(&format!(" {secs}s"));
+            }
+            f.render_widget(
+                Paragraph::new(text)
+                    .style(Style::default().fg(t.accent))
+                    .wrap(Wrap { trim: true }),
+                err,
+            );
+            f.render_widget(Span::styled("Working… please wait", t.dimmed()), keys);
+            return;
+        }
         if let Some(e) = &self.error {
             f.render_widget(
                 Paragraph::new(e.as_str())
                     .style(Style::default().fg(t.error))
                     .wrap(Wrap { trim: true }),
+                err,
+            );
+        } else if self.from_remote {
+            f.render_widget(
+                Paragraph::new(format!(
+                    "Won't track {}: the first push publishes it under its own name.",
+                    self.start
+                ))
+                .style(t.dimmed())
+                .wrap(Wrap { trim: true }),
                 err,
             );
         }
@@ -271,6 +371,10 @@ impl Popup for NewBranchPopup {
     }
 
     fn handle_key(&mut self, key: KeyEvent, ctx: &Ctx) -> Action {
+        if self.job.is_some() {
+            // git is already running; there is nothing safe to cancel.
+            return Action::None;
+        }
         match key.code {
             KeyCode::Esc => return Action::ClosePopup,
             KeyCode::Enter => return self.create(ctx),
@@ -283,7 +387,45 @@ impl Popup for NewBranchPopup {
         Action::None
     }
 
+    /// Collect progress from the background create; after a confirmed overwrite, start it.
+    fn poll(&mut self, ctx: &Ctx) -> Action {
+        if self.confirmed.take() {
+            if let Some(req) = self.awaiting.take() {
+                return self.start_job(ctx, req, false);
+            }
+        }
+        let Some(job) = &mut self.job else {
+            return Action::None;
+        };
+        while let Ok(p) = job.rx.try_recv() {
+            match p {
+                Progress::Step(s) => job.step = s,
+                Progress::WouldLose(lost, tip) => {
+                    // The dialog is idle again while the confirmation is open; declining just
+                    // closes the confirmation.
+                    let req = self.job.take().map(|j| j.req).expect("job is running");
+                    let a = overwrite_confirm(&req, lost, &tip, self.confirmed.clone());
+                    self.awaiting = Some(req);
+                    return a;
+                }
+                Progress::Done(Ok(msg)) => {
+                    self.job = None;
+                    return Action::ClosePopup.then(done(msg));
+                }
+                Progress::Done(Err(e)) => {
+                    self.job = None;
+                    self.error = Some(e);
+                    return Action::None;
+                }
+            }
+        }
+        Action::None
+    }
+
     fn help(&self) -> Vec<KeyHelp> {
+        if self.job.is_some() {
+            return Vec::new();
+        }
         vec![
             ("Enter", "create"),
             ("Tab", "next field"),

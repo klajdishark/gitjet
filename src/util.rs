@@ -34,8 +34,10 @@ fn self_exe() -> String {
 }
 
 /// Value for GIT_EDITOR / GIT_SEQUENCE_EDITOR that accepts whatever git proposes (no terminal needed).
-pub fn noop_editor() -> String {
-    format!("{} {}", sh_quote(&self_exe()), NOOP_EDITOR_ARG)
+/// Set on every git command, so it is computed once.
+pub fn noop_editor() -> &'static str {
+    static EDITOR: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    EDITOR.get_or_init(|| format!("{} {}", sh_quote(&self_exe()), NOOP_EDITOR_ARG))
 }
 
 /// Value for GIT_EDITOR / GIT_SEQUENCE_EDITOR that overwrites the file git opens with `src`.

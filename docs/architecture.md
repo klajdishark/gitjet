@@ -94,11 +94,22 @@ pub trait View {
     fn help(&self) -> Vec<KeyHelp> { Vec::new() }
     fn captures_input(&self) -> bool { false }
     fn badge(&self) -> Option<String> { None }
+    fn poll(&mut self, ctx: &Ctx) {}
+    fn loading(&self) -> bool { false }
 }
 ```
 
 - `refresh` reloads from Git. It runs when the tab is first shown and after every
   `Action::Refresh`; hidden tabs are only marked dirty and refresh when they become visible.
+  It must not wait on git: it starts a `ui::bg::Background` job and returns, and `poll` applies
+  the result when it arrives. Starting a `git` process costs 50–150 ms on Windows, so a git call
+  on the UI thread freezes the screen there.
+- `poll` runs about ten times a second for every tab, visible or not, to pick up background
+  results. `loading` returns `true` while a refresh is running; the status bar then shows a
+  spinner ("Loading Changes").
+- Panes that follow the selection (diff previews, branch details) load through `ui::bg::Preview`,
+  which waits until the selection rests and caches results, so holding an arrow key does not start
+  a git command per row.
 - `help` returns `(key, description)` pairs. The first eight appear in the hint line; all of them
   appear in the `?` overlay.
 - `captures_input` returns `true` while a text field in the view has focus, so the app does not
@@ -169,20 +180,24 @@ focus change events) and runs `App::event_loop`:
 1. Draw: tab bar, the active view, status bar, hint line, then every popup from bottom to top.
 2. Wait up to 100 ms for input, then drain all queued events before the next draw. Keys go to the
    top popup if there is one; otherwise global keys are checked (unless the view captures input),
-   then the view gets the key. A paste is replayed as key presses. Focus gained triggers a refresh.
+   then the view gets the key. A paste is replayed as key presses. Focus gained requests a refresh
+   (unless one ran in the last second).
 3. `poll_tasks`: collect finished background tasks. A non-silent task shows its message (or
-   "<label> finished") or its error, triggers a refresh, then runs its `then` follow-up.
-4. `tick`: expire toasts, start the silent local history snapshot task when it is due, and call
-   `poll` on every popup.
-5. If an `Action::Suspend` is pending: restore the terminal, run the command in the repository
+   "<label> finished") or its error, requests a refresh, then runs its `then` follow-up.
+4. If a refresh was requested (`Action::Refresh`, any number of times since the last pass), run it
+   once: mark every tab dirty and refresh the visible tab, the Conflicts tab and every popup.
+5. `tick`: expire toasts, start the silent local history snapshot task when it is due, call `poll`
+   on every tab and popup, and check the Conflicts badge (below).
+6. If an `Action::Suspend` is pending: restore the terminal, run the command in the repository
    root and wait for it, set the terminal up again, report a non-zero exit, refresh.
 
 Background tasks are plain `std::thread`s that send a `TaskDone` back over an `mpsc` channel. They
 receive a clone of `Repo`, never the views. Silent tasks (local history snapshots) show no spinner
 and trigger no refresh.
 
-After each refresh the app checks the Conflicts tab's badge. When conflicts appear that were not
-there before, it switches to the Conflicts tab.
+Whenever the Conflicts tab is not loading, the app checks its badge. When conflicts appear that
+were not there before, it switches to the Conflicts tab (conflicts already present at startup set
+the baseline and don't switch tabs).
 
 ## How Git is run
 

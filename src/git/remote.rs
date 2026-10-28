@@ -70,7 +70,7 @@ pub fn auth_hint(e: anyhow::Error, op: &str) -> anyhow::Error {
 
 /// A plain interactive `git` command for `Action::Suspend` (real terminal, so prompts work).
 pub fn terminal_command(repo: &Repo, args: &[&str]) -> Command {
-    let mut c = Command::new("git");
+    let mut c = Command::new(super::git_program());
     c.args(args).current_dir(&repo.root);
     c
 }

@@ -225,7 +225,11 @@ fn abort_rebase(ctx: &Ctx) -> Action {
                  commits already rewritten and resolved conflicts are discarded.",
                 progress_suffix(&p)
             ),
-            |ctx| Action::from_result(rebase::abort(&ctx.repo), "Rebase aborted"),
+            |_| {
+                Action::spawn("Abort rebase", |repo| {
+                    rebase::abort(repo).map(|_| "Rebase aborted".into())
+                })
+            },
         )
         .danger(),
     )

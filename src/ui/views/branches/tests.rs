@@ -364,6 +364,23 @@ fn checkout_blocked_by_untracked_files_names_them() {
 }
 
 #[test]
+fn new_branch_from_remote_uses_local_name_without_upstream() {
+    let (_b, _d, ctx) = setup();
+    let all = branch::list_branches(&ctx.repo).unwrap();
+    let remote_only = all.iter().find(|b| b.name == "origin/remote-only").unwrap();
+    let mut nb = new_branch::NewBranchPopup::new(Some(remote_only));
+    let s = render_popup(&mut nb, &ctx, 100, 20);
+    assert!(s.contains("remote-only"), "{s}");
+    assert!(s.contains("Won't track origin/remote-only"), "{s}");
+    assert!(matches!(
+        nb.handle_key(key(KeyCode::Enter), &ctx),
+        Action::Batch(_)
+    ));
+    assert_eq!(ctx.repo.head_branch().as_deref(), Some("remote-only"));
+    assert!(crate::git::remote::upstream_of(&ctx.repo, "remote-only").is_none());
+}
+
+#[test]
 fn overwriting_a_branch_with_unique_commits_asks_first() {
     let (_b, _d, ctx) = setup();
     let repo = &ctx.repo;
@@ -388,11 +405,11 @@ fn overwriting_a_branch_with_unique_commits_asks_first() {
         Action::ClosePopup
     ));
     assert_eq!(repo.rev_parse("topic").unwrap(), old_tip);
+    // Declining left the dialog usable.
     let mut confirm = popup_of(nb.handle_key(key(KeyCode::Enter), &ctx)).expect("danger confirm");
-    assert!(matches!(
-        confirm.handle_key(key(KeyCode::Char('y')), &ctx),
-        Action::Batch(_)
-    ));
+    // Confirming closes the confirmation; the dialog then creates the branch and closes itself.
+    confirm.handle_key(key(KeyCode::Char('y')), &ctx);
+    assert!(matches!(nb.poll(&ctx), Action::Batch(_)));
     assert_eq!(
         repo.rev_parse("topic").unwrap(),
         repo.rev_parse("main").unwrap()

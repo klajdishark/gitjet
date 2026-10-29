@@ -9,7 +9,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 
-use super::widgets::{centered, move_sel, panel, TextArea, TextInput};
+use super::widgets::{centered, dialog, move_sel, TextArea, TextInput};
 use super::{KeyHelp, Popup};
 use crate::action::Action;
 use crate::ctx::Ctx;
@@ -64,7 +64,7 @@ impl Popup for ConfirmPopup {
         let lines = self.message.lines().count() as u16 + (self.message.len() as u16 / width) + 4;
         let r = centered(area, width, lines.min(area.height));
         f.render_widget(Clear, r);
-        let mut block = panel(format!(" {} ", self.title), true, t);
+        let mut block = dialog(format!(" {} ", self.title), t);
         if self.danger {
             block = block.border_style(Style::default().fg(t.error));
         }
@@ -153,7 +153,7 @@ impl Popup for InputPopup {
         };
         let r = centered(area, 70, 4 + prompt_lines);
         f.render_widget(Clear, r);
-        let block = panel(format!(" {} ", self.title), true, t);
+        let block = dialog(format!(" {} ", self.title), t);
         let inner = block.inner(r);
         f.render_widget(block, r);
         let [p, field, keys] = Layout::vertical([
@@ -236,7 +236,7 @@ impl Popup for TextAreaPopup {
         let t = &ctx.theme;
         let r = centered(area, 90, 20);
         f.render_widget(Clear, r);
-        let block = panel(format!(" {} ", self.title), true, t);
+        let block = dialog(format!(" {} ", self.title), t);
         let inner = block.inner(r);
         f.render_widget(block, r);
         let [text, keys] =
@@ -428,7 +428,7 @@ impl Popup for MenuPopup {
         let height = (vis.len() as u16 + 2 + extra).clamp(5, 24);
         let r = centered(area, width, height);
         f.render_widget(Clear, r);
-        let block = panel(format!(" {} ", self.title), true, t);
+        let block = dialog(format!(" {} ", self.title), t);
         let inner = block.inner(r);
         f.render_widget(block, r);
         let [filter_area, list_area] =
@@ -553,11 +553,11 @@ impl Popup for MessagePopup {
         let height = (self.lines.len() as u16 + 3).clamp(5, area.height.saturating_sub(2).max(5));
         let r = centered(area, width, height);
         f.render_widget(Clear, r);
-        let mut block = panel(format!(" {} ", self.title), true, t);
+        let mut block = dialog(format!(" {} ", self.title), t);
         if self.is_error {
             block = block
                 .border_style(Style::default().fg(t.error))
-                .title_style(Style::default().fg(t.error).add_modifier(Modifier::BOLD));
+                .title_style(Style::default().fg(t.error));
         }
         let inner = block.inner(r);
         f.render_widget(block, r);

@@ -130,9 +130,8 @@ impl Popup for ComparePopup {
         let t = &ctx.theme;
         let r = centered_pct(area, 92, 88);
         f.render_widget(Clear, r);
-        let block = panel(
+        let block = crate::ui::widgets::dialog(
             format!(" Compare {} with {} ", self.branch, self.current),
-            true,
             t,
         );
         let inner = block.inner(r);

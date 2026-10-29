@@ -1,13 +1,13 @@
 [package]
 name = "gitjet"
-version = "0.1.1"
+version = "0.1.8"
 edition = "2021"
 rust-version = "1.80"
 description = "A keyboard-driven terminal Git client with IDE-grade features: changelists, shelf, partial commits, 3-way merge, interactive rebase, blame, local history and more"
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/klajdishark/gitjet"
-homepage = "https://github.com/klajdishark/gitjet"
+repository = "https://github.com/kashari/gitjet"
+homepage = "https://github.com/kashari/gitjet"
 keywords = ["git", "tui", "terminal", "vcs", "ratatui"]
 categories = ["command-line-utilities", "development-tools"]
 

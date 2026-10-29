@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 use ratatui::Frame;
@@ -20,8 +20,6 @@ use crate::git::Repo;
 use crate::ui::popups::{MenuItem, MenuPopup};
 use crate::ui::widgets::{centered, panel, TextArea, TextInput};
 use crate::ui::{KeyHelp, Popup};
-
-const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 /// What a commit will contain.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -586,7 +584,7 @@ impl CommitDialog {
 
         let status_line = match (&self.state, &self.error) {
             (State::Running { since, checks }, _) => {
-                let frame = SPINNER[(since.elapsed().as_millis() / 100) as usize % SPINNER.len()];
+                let frame = crate::app::spinner_frame(*since);
                 let what = if *checks {
                     "Running commit checks…"
                 } else {
@@ -698,7 +696,7 @@ impl Popup for CommitDialog {
         } else {
             self.title.clone()
         };
-        let block = panel(title, true, t);
+        let block = crate::ui::widgets::dialog(title, t);
         let inner = block.inner(r);
         f.render_widget(block, r);
         if matches!(self.state, State::Edit | State::Running { .. }) {
@@ -715,10 +713,7 @@ impl Popup for CommitDialog {
                 ])
                 .areas(inner);
                 f.render_widget(
-                    Line::styled(
-                        "Commit checks failed",
-                        Style::default().fg(t.error).add_modifier(Modifier::BOLD),
-                    ),
+                    Line::styled("Commit checks failed", Style::default().fg(t.error)),
                     head,
                 );
                 let lines = output.lines().count() as u16;

@@ -8,6 +8,7 @@ mod form;
 mod preview;
 
 use std::collections::BTreeSet;
+use std::time::Duration;
 
 use ratatui::crossterm::event::{
     KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -23,6 +24,8 @@ use crate::ctx::Ctx;
 use crate::git::diff::{DiffOptions, FileDiff};
 use crate::git::shelf::{self, ShelfEntry};
 use crate::git::stash::{self, StashEntry};
+use crate::git::Repo;
+use crate::ui::bg::{Background, Preview};
 use crate::ui::diff_view::{self, diff_height, draw_diff, DiffSource};
 use crate::ui::popups::{MenuItem, MenuPopup};
 use crate::ui::widgets::{move_sel, panel, scroll_to_keep_visible, TextInput};
@@ -85,6 +88,25 @@ struct Areas {
     diff: Rect,
 }
 
+/// How long the selection must rest on an entry before its files load.
+const PREVIEW_DELAY: Duration = Duration::from_millis(60);
+
+type PreviewData = Result<Vec<FileDiff>, String>;
+type PreviewJob = Box<dyn FnOnce(&Repo) -> PreviewData + Send>;
+
+/// What a refresh loads off the UI thread (each list fails on its own).
+struct Loaded {
+    stashes: Result<Vec<StashEntry>, String>,
+    shelves: Result<Vec<ShelfEntry>, String>,
+}
+
+fn load_lists(repo: &Repo) -> Loaded {
+    Loaded {
+        stashes: stash::list(repo).map_err(|e| format!("{e:#}")),
+        shelves: shelf::list(repo).map_err(|e| format!("{e:#}")),
+    }
+}
+
 pub struct ShelfView {
     stashes: Vec<StashEntry>,
     shelves: Vec<ShelfEntry>,
@@ -99,6 +121,11 @@ pub struct ShelfView {
     /// Set by refresh: reload the preview even if the selection is unchanged
     preview_stale: bool,
     preview_error: Option<String>,
+    previews: Preview<(String, String), PreviewData>,
+    /// Set while `preview_key`'s files are loading: (same entry as before, file to keep selected)
+    preview_pending: Option<(bool, Option<String>)>,
+    loader: Background<Loaded>,
+    load_error: Option<String>,
     /// Files marked (Space) for a partial unshelve
     marked: BTreeSet<String>,
     diff_scroll: usize,
@@ -122,6 +149,10 @@ impl ShelfView {
             preview_key: None,
             preview_stale: false,
             preview_error: None,
+            previews: Preview::new(PREVIEW_DELAY, 16),
+            preview_pending: None,
+            loader: Background::new(),
+            load_error: None,
             marked: BTreeSet::new(),
             diff_scroll: 0,
             diff_page: 10,
@@ -231,29 +262,56 @@ impl ShelfView {
     }
 
     /// Reload the file list when the selected entry changed (or after a refresh).
+    /// Request the selected entry's files when the selection changed (or after a refresh), and
+    /// show them once loaded.
     fn sync_preview(&mut self, ctx: &Ctx) {
         let key = self.current_key();
-        if key == self.preview_key && !self.preview_stale {
+        if key != self.preview_key || self.preview_stale {
+            self.preview_stale = false;
+            let same_entry = matches!((&key, &self.preview_key), (Some(a), Some(b)) if a.0 == b.0);
+            let keep_path = same_entry
+                .then(|| self.selected_file().map(|d| d.path().to_string()))
+                .flatten();
+            self.preview_key = key.clone();
+            self.preview_pending = Some((same_entry, keep_path));
+            if !same_entry {
+                // Don't show the previous entry's files under the new selection.
+                self.files.clear();
+                self.preview_error = None;
+            }
+            let opts = DiffOptions::from_config(&ctx.config.diff);
+            let job: Option<PreviewJob> = match self.source {
+                Source::Stash => self.selected_stash().cloned().map(|s| -> PreviewJob {
+                    Box::new(move |repo| {
+                        stash::diffs(repo, &s, &opts).map_err(|e| format!("{e:#}"))
+                    })
+                }),
+                Source::Shelf => self.selected_shelf().cloned().map(|e| -> PreviewJob {
+                    Box::new(move |_| e.diffs().map_err(|e| format!("{e:#}")))
+                }),
+            };
+            if let (Some(k), Some(job)) = (key, job) {
+                self.previews.request(&ctx.repo, k, job);
+            }
+        }
+        if self.preview_pending.is_none() {
             return;
         }
-        self.preview_stale = false;
-        let same_entry = matches!((&key, &self.preview_key), (Some(a), Some(b)) if a.0 == b.0);
-        let keep_path = same_entry
-            .then(|| self.selected_file().map(|d| d.path().to_string()))
-            .flatten();
-        self.preview_key = key;
-        self.preview_error = None;
-        let opts = DiffOptions::from_config(&ctx.config.diff);
-        let loaded = match self.source {
-            Source::Stash => self
-                .selected_stash()
-                .map(|s| stash::diffs(&ctx.repo, s, &opts)),
-            Source::Shelf => self.selected_shelf().map(ShelfEntry::diffs),
+        let loaded = match &self.preview_key {
+            Some(k) => match self.previews.get(k) {
+                Some(r) => Some(r),
+                None => return,
+            },
+            None => None,
         };
+        let Some((same_entry, keep_path)) = self.preview_pending.take() else {
+            return;
+        };
+        self.preview_error = None;
         self.files = match loaded {
             Some(Ok(d)) => d,
             Some(Err(e)) => {
-                self.preview_error = Some(format!("{e:#}"));
+                self.preview_error = Some(e);
                 Vec::new()
             }
             None => Vec::new(),
@@ -271,6 +329,59 @@ impl ShelfView {
             .unwrap_or(0);
         self.file_pane.offset = 0;
         self.diff_scroll = 0;
+    }
+
+    /// True while a newly selected entry's files are loading (a reload of the same entry keeps
+    /// showing the old files).
+    fn preview_loading(&self) -> bool {
+        matches!(self.preview_pending, Some((false, _)))
+    }
+
+    /// Apply a finished refresh.
+    fn apply_loaded(&mut self, ctx: &Ctx) {
+        let Some(loaded) = self.loader.poll() else {
+            return;
+        };
+        let sel_stash = self.selected_stash().map(|s| s.hash.clone());
+        let sel_shelf = self.selected_shelf().map(|e| e.id.clone());
+        self.load_error = loaded
+            .stashes
+            .as_ref()
+            .err()
+            .or(loaded.shelves.as_ref().err())
+            .cloned();
+        self.stashes = loaded.stashes.unwrap_or_default();
+        self.shelves = loaded.shelves.unwrap_or_default();
+        if let Some(h) = sel_stash {
+            if let Some(p) = self
+                .stash_visible()
+                .iter()
+                .position(|&i| self.stashes[i].hash == h)
+            {
+                self.stash_pane.sel = p;
+            }
+        }
+        if let Some(id) = sel_shelf {
+            if let Some(p) = self
+                .shelf_visible()
+                .iter()
+                .position(|&i| self.shelves[i].id == id)
+            {
+                self.shelf_pane.sel = p;
+            }
+        }
+        self.stash_pane.sel = self
+            .stash_pane
+            .sel
+            .min(self.stash_visible().len().saturating_sub(1));
+        self.shelf_pane.sel = self
+            .shelf_pane
+            .sel
+            .min(self.shelf_visible().len().saturating_sub(1));
+        // Force a reload of the preview (files may have changed on disk), keeping the file selection.
+        self.previews.invalidate();
+        self.preview_stale = true;
+        self.sync_preview(ctx);
     }
 
     // ----- actions -------------------------------------------------------------------------
@@ -782,13 +893,17 @@ impl ShelfView {
                 info,
             );
         }
-        if let Some(e) = &self.preview_error {
+        if let Some(e) = self.load_error.as_ref().or(self.preview_error.as_ref()) {
             f.render_widget(
                 Paragraph::new(e.as_str())
                     .style(Style::default().fg(t.error))
                     .wrap(Wrap { trim: true }),
                 list,
             );
+            return;
+        }
+        if self.preview_loading() {
+            f.render_widget(Paragraph::new("Loading…").style(t.dimmed()), list);
             return;
         }
         let vis = self.file_visible();
@@ -892,44 +1007,18 @@ impl View for ShelfView {
     }
 
     fn refresh(&mut self, ctx: &Ctx) -> anyhow::Result<()> {
-        let sel_stash = self.selected_stash().map(|s| s.hash.clone());
-        let sel_shelf = self.selected_shelf().map(|e| e.id.clone());
-        let stashes = stash::list(&ctx.repo);
-        let shelves = shelf::list(&ctx.repo);
-        self.stashes = stashes.as_ref().map(|v| v.clone()).unwrap_or_default();
-        self.shelves = shelves.as_ref().map(|v| v.clone()).unwrap_or_default();
-        if let Some(h) = sel_stash {
-            if let Some(p) = self
-                .stash_visible()
-                .iter()
-                .position(|&i| self.stashes[i].hash == h)
-            {
-                self.stash_pane.sel = p;
-            }
-        }
-        if let Some(id) = sel_shelf {
-            if let Some(p) = self
-                .shelf_visible()
-                .iter()
-                .position(|&i| self.shelves[i].id == id)
-            {
-                self.shelf_pane.sel = p;
-            }
-        }
-        self.stash_pane.sel = self
-            .stash_pane
-            .sel
-            .min(self.stash_visible().len().saturating_sub(1));
-        self.shelf_pane.sel = self
-            .shelf_pane
-            .sel
-            .min(self.shelf_visible().len().saturating_sub(1));
-        // Force a reload of the preview (files may have changed on disk), keeping the file selection.
-        self.preview_stale = true;
-        self.sync_preview(ctx);
-        stashes?;
-        shelves?;
+        self.loader.start(&ctx.repo, load_lists);
+        self.apply_loaded(ctx);
         Ok(())
+    }
+
+    fn poll(&mut self, ctx: &Ctx) {
+        self.apply_loaded(ctx);
+        self.sync_preview(ctx);
+    }
+
+    fn loading(&self) -> bool {
+        self.loader.busy()
     }
 
     fn draw(&mut self, f: &mut Frame, area: Rect, ctx: &Ctx) {

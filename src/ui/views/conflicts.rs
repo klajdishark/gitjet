@@ -5,6 +5,8 @@
 mod resolver;
 mod rows;
 
+use std::sync::{Arc, Mutex};
+
 use ratatui::crossterm::event::{
     KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
@@ -17,7 +19,8 @@ use ratatui::Frame;
 use crate::action::Action;
 use crate::ctx::Ctx;
 use crate::git::conflict::{self, ConflictFile, MarkerCache, Operation, Side};
-use crate::git::RepoState;
+use crate::git::{Repo, RepoState};
+use crate::ui::bg::Background;
 use crate::ui::diff_view::{self, DiffSource};
 use crate::ui::popups::{ConfirmPopup, MenuItem, MenuPopup};
 use crate::ui::views::Tab;
@@ -25,12 +28,40 @@ use crate::ui::widgets::{move_sel, panel, scroll_to_keep_visible, TextInput};
 use crate::ui::{KeyHelp, PaletteItem, View};
 use crate::util;
 
+/// What a refresh loads off the UI thread.
+struct Loaded {
+    files: Vec<ConflictFile>,
+    markers: Vec<Option<usize>>,
+    /// The operation and its fingerprint, when the fingerprint changed.
+    op: Option<(Operation, String)>,
+}
+
+/// Runs on every refresh, even while the tab is hidden (for the badge), so it only starts
+/// `git ls-files -u`; the operation and marker counts are recomputed when changed.
+fn load_conflicts(
+    repo: &Repo,
+    old_fingerprint: &str,
+    cache: &Mutex<MarkerCache>,
+) -> anyhow::Result<Loaded> {
+    let fingerprint = conflict::operation_fingerprint(repo);
+    let op = (fingerprint != old_fingerprint).then(|| (conflict::operation(repo), fingerprint));
+    let files = conflict::list(repo)?;
+    let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+    let markers = match cache.lock() {
+        Ok(mut c) => c.scan(repo, &paths),
+        Err(_) => vec![None; paths.len()],
+    };
+    Ok(Loaded { files, markers, op })
+}
+
 pub struct ConflictsView {
     files: Vec<ConflictFile>,
     /// Conflict markers in each work-tree file (None: deleted, binary, or not scanned).
     markers: Vec<Option<usize>>,
     /// Marker counts by file size and mtime: refreshes only re-read files that changed.
-    marker_cache: MarkerCache,
+    marker_cache: Arc<Mutex<MarkerCache>>,
+    loader: Background<Result<Loaded, String>>,
+    load_error: Option<String>,
     op: Operation,
     /// [`conflict::operation_fingerprint`] of `op`: unchanged means `op` needs no git calls.
     op_fingerprint: String,
@@ -43,13 +74,24 @@ pub struct ConflictsView {
 }
 
 impl ConflictsView {
-    pub fn new(ctx: &Ctx) -> Self {
+    pub fn new(_ctx: &Ctx) -> Self {
         Self {
             files: Vec::new(),
             markers: Vec::new(),
-            marker_cache: MarkerCache::default(),
-            op: conflict::operation(&ctx.repo),
-            op_fingerprint: conflict::operation_fingerprint(&ctx.repo),
+            marker_cache: Arc::new(Mutex::new(MarkerCache::default())),
+            loader: Background::new(),
+            load_error: None,
+            // Described by the first refresh (an empty fingerprint never matches).
+            op: Operation {
+                state: RepoState::Clean,
+                branch: None,
+                step: None,
+                head_name: None,
+                onto: None,
+                other: None,
+                subject: None,
+            },
+            op_fingerprint: String::new(),
             sel: 0,
             offset: 0,
             filter: TextInput::default(),
@@ -57,6 +99,35 @@ impl ConflictsView {
             list_area: Rect::default(),
             list_top: 0,
         }
+    }
+
+    /// Apply a finished refresh.
+    fn apply_loaded(&mut self) {
+        let Some(res) = self.loader.poll() else {
+            return;
+        };
+        let loaded = match res {
+            Ok(l) => l,
+            Err(e) => {
+                self.load_error = Some(e);
+                return;
+            }
+        };
+        self.load_error = None;
+        let prev = self.selected().map(|f| f.path.clone());
+        if let Some((op, fingerprint)) = loaded.op {
+            self.op = op;
+            self.op_fingerprint = fingerprint;
+        }
+        self.files = loaded.files;
+        self.markers = loaded.markers;
+        let vis = self.visible();
+        if let Some(p) = prev {
+            if let Some(pos) = vis.iter().position(|&i| self.files[i].path == p) {
+                self.sel = pos;
+            }
+        }
+        self.sel = self.sel.min(vis.len().saturating_sub(1));
     }
 
     /// Indices of files matching the filter.
@@ -130,7 +201,9 @@ impl ConflictsView {
             Line::styled("No conflicts", t.title()),
             Line::raw(""),
         ];
-        if self.op.in_progress() {
+        if let Some(e) = &self.load_error {
+            lines.push(Line::styled(e.clone(), Style::default().fg(t.error)));
+        } else if self.op.in_progress() {
             lines.push(Line::from(vec![
                 Span::styled("All conflicts are resolved. Press ", t.text()),
                 Span::styled("C", t.key()),
@@ -251,7 +324,7 @@ impl ConflictsView {
             None => "deleted".to_string(),
         };
         let mut lines = vec![
-            Line::styled(file.path.clone(), t.text().add_modifier(Modifier::BOLD)),
+            Line::styled(file.path.clone(), t.text()),
             Line::raw(""),
             row("Conflict", file.kind.label().to_string()),
             row("Base", have(file.stages.base.is_some()).to_string()),
@@ -394,25 +467,21 @@ impl View for ConflictsView {
     }
 
     fn refresh(&mut self, ctx: &Ctx) -> anyhow::Result<()> {
-        let prev = self.selected().map(|f| f.path.clone());
-        // This runs on every refresh, even while the tab is hidden (for the badge), so it only
-        // starts `git ls-files -u`; the operation and marker counts are recomputed when changed.
-        let fingerprint = conflict::operation_fingerprint(&ctx.repo);
-        if fingerprint != self.op_fingerprint {
-            self.op = conflict::operation(&ctx.repo);
-            self.op_fingerprint = fingerprint;
-        }
-        self.files = conflict::list(&ctx.repo)?;
-        let paths: Vec<&str> = self.files.iter().map(|f| f.path.as_str()).collect();
-        self.markers = self.marker_cache.scan(&ctx.repo, &paths);
-        let vis = self.visible();
-        if let Some(p) = prev {
-            if let Some(pos) = vis.iter().position(|&i| self.files[i].path == p) {
-                self.sel = pos;
-            }
-        }
-        self.sel = self.sel.min(vis.len().saturating_sub(1));
+        let fingerprint = self.op_fingerprint.clone();
+        let cache = self.marker_cache.clone();
+        self.loader.start(&ctx.repo, move |repo| {
+            load_conflicts(repo, &fingerprint, &cache).map_err(|e| format!("{e:#}"))
+        });
+        self.apply_loaded();
         Ok(())
+    }
+
+    fn poll(&mut self, _ctx: &Ctx) {
+        self.apply_loaded();
+    }
+
+    fn loading(&self) -> bool {
+        self.loader.busy()
     }
 
     fn draw(&mut self, f: &mut Frame, area: Rect, ctx: &Ctx) {
@@ -553,9 +622,13 @@ fn with_path(path: &str, f: fn(&Ctx, &str) -> Action) -> impl FnOnce(&Ctx) -> Ac
 
 /// Resolve one file with one side (deleting it when that side removed it).
 fn accept_one(ctx: &Ctx, path: &str, side: Side) -> Action {
-    Action::from_result(
-        conflict::accept_side(&ctx.repo, &[path.to_string()], side),
-        format!("Resolved {path} with {}", side.label()),
+    let msg = format!("Resolved {path} with {}", side.label());
+    let paths = vec![path.to_string()];
+    Action::run_op(
+        &ctx.repo,
+        format!("Accepting {}", side.label()),
+        msg,
+        move |repo| conflict::accept_side(repo, &paths, side),
     )
 }
 
@@ -605,7 +678,9 @@ fn mark_resolved(ctx: &Ctx, path: String, markers: Option<usize>) -> Action {
 
 fn mark_now(ctx: &Ctx, path: String) -> Action {
     let msg = format!("Marked {path} as resolved");
-    Action::from_result(conflict::mark_resolved(&ctx.repo, &[path]), msg)
+    Action::run_op(&ctx.repo, "Marking resolved", msg, move |repo| {
+        conflict::mark_resolved(repo, &[path])
+    })
 }
 
 fn delete(_ctx: &Ctx, path: &str) -> Action {
@@ -616,7 +691,9 @@ fn delete(_ctx: &Ctx, path: &str) -> Action {
             format!("Resolve the conflict by deleting {path} from the work tree and the index?"),
             move |ctx| {
                 let msg = format!("Deleted {path}");
-                Action::from_result(conflict::delete(&ctx.repo, &[path]), msg)
+                Action::run_op(&ctx.repo, "Deleting", msg, move |repo| {
+                    conflict::delete(repo, &[path])
+                })
             },
         )
         .danger(),
@@ -628,11 +705,7 @@ fn edit(ctx: &Ctx, path: &str) -> Action {
     let line = std::fs::read_to_string(&abs)
         .ok()
         .and_then(|s| conflict::marker_lines(&s).first().map(|l| l + 1));
-    Action::Suspend(util::editor_command(
-        ctx.config.editor.as_deref(),
-        &abs,
-        line,
-    ))
+    Action::edit(abs, line)
 }
 
 fn side_name(side: Option<Side>) -> &'static str {

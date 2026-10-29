@@ -1,4 +1,8 @@
 //! Push dialog: commits to push, their files, options, background push.
+//!
+//! The commits and each commit's files load in the background, so the dialog opens at once.
+
+use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -12,6 +16,7 @@ use crate::ctx::Ctx;
 use crate::git::branch;
 use crate::git::log::Commit;
 use crate::git::remote::{self, PushSpec};
+use crate::ui::bg::{Background, Preview};
 use crate::ui::diff_view::{self, DiffSource};
 use crate::ui::popups::{ConfirmPopup, InputPopup, MenuItem, MenuPopup};
 use crate::ui::views::branches::commit_line;
@@ -57,6 +62,9 @@ impl Focus {
 
 type FileEntry = (char, String, Option<String>);
 
+/// Whether the target branch is new on the remote, and the commits to push.
+type Loaded = (bool, Result<Vec<Commit>, String>);
+
 pub struct PushPopup {
     spec: PushSpec,
     /// The target branch does not exist on the remote yet
@@ -72,6 +80,10 @@ pub struct PushPopup {
     focus: Focus,
     error: Option<String>,
     page: usize,
+    loader: Background<Loaded>,
+    /// When the current load started (for the spinner)
+    loading_since: Instant,
+    file_loader: Preview<String, Vec<FileEntry>>,
 }
 
 impl PushPopup {
@@ -89,20 +101,40 @@ impl PushPopup {
             focus: Focus::Commits,
             error: None,
             page: 10,
+            loader: Background::new(),
+            loading_since: Instant::now(),
+            file_loader: Preview::new(Duration::from_millis(40), 32),
         };
         p.load(ctx);
         p
     }
 
+    /// Start (re)loading the commits to push; the result arrives in [`apply_loaded`](Self::apply_loaded).
     fn load(&mut self, ctx: &Ctx) {
-        let s = &self.spec;
-        self.is_new = !remote::remote_branch_exists(&ctx.repo, &s.remote, &s.target);
-        match remote::commits_to_push(&ctx.repo, &s.local, &s.remote, &s.target, MAX_COMMITS) {
+        let s = self.spec.clone();
+        self.loading_since = Instant::now();
+        self.file_loader.invalidate();
+        self.loader.start(&ctx.repo, move |repo| {
+            let is_new = !remote::remote_branch_exists(repo, &s.remote, &s.target);
+            let commits =
+                remote::commits_to_push(repo, &s.local, &s.remote, &s.target, MAX_COMMITS)
+                    .map_err(|e| format!("{e:#}"));
+            (is_new, commits)
+        });
+        self.apply_loaded();
+    }
+
+    fn apply_loaded(&mut self) {
+        let Some((is_new, commits)) = self.loader.poll() else {
+            return;
+        };
+        self.is_new = is_new;
+        match commits {
             Ok(c) => {
                 self.commits = c;
                 self.error = None;
             }
-            Err(e) => self.error = Some(format!("{e:#}")),
+            Err(e) => self.error = Some(e),
         }
         self.sel = self.sel.min(self.commits.len().saturating_sub(1));
         self.files_for = None;
@@ -114,19 +146,31 @@ impl PushPopup {
 
     fn ensure_files(&mut self, ctx: &Ctx) {
         let id = self.commits.get(self.sel).map(|c| c.id.clone());
-        if id == self.files_for {
+        let Some(id) = id else {
+            self.files.clear();
+            self.files_for = None;
+            return;
+        };
+        if self.files_for.as_ref() == Some(&id) {
             return;
         }
-        self.files = id
-            .as_deref()
-            .and_then(|id| ctx.repo.commit_files(id).ok())
-            .unwrap_or_default();
-        self.files_for = id;
-        self.file_sel = 0;
-        self.file_offset = 0;
+        let key = id.clone();
+        self.file_loader.request(&ctx.repo, key, move |repo| {
+            repo.commit_files(&id).unwrap_or_default()
+        });
+        let id = self.commits[self.sel].id.clone();
+        if let Some(files) = self.file_loader.get(&id) {
+            self.files = files;
+            self.files_for = Some(id);
+            self.file_sel = 0;
+            self.file_offset = 0;
+        }
     }
 
     fn push(&self) -> Action {
+        if self.loader.busy() {
+            return Action::Toast("Still working out what to push…".into());
+        }
         if self.nothing_to_push() {
             return Action::Toast("Nothing to push".into());
         }
@@ -238,6 +282,17 @@ impl PushPopup {
         );
         let inner = block.inner(area);
         f.render_widget(block, area);
+        if self.loader.busy() && self.commits.is_empty() {
+            let msg = format!(
+                "{} Finding commits to push…",
+                crate::app::spinner_frame(self.loading_since)
+            );
+            f.render_widget(
+                Paragraph::new(msg).style(Style::default().fg(t.accent)),
+                inner,
+            );
+            return;
+        }
         if let Some(e) = &self.error {
             f.render_widget(
                 Paragraph::new(e.as_str()).style(Style::default().fg(t.error)),
@@ -436,7 +491,7 @@ impl Popup for PushPopup {
         let t = &ctx.theme;
         let r = centered_pct(area, 90, 85);
         f.render_widget(Clear, r);
-        let block = panel(" Push Commits ", true, t);
+        let block = crate::ui::widgets::dialog(" Push Commits ", t);
         let inner = block.inner(r);
         f.render_widget(block, r);
         let [header, body, options, footer] = Layout::vertical([
@@ -507,6 +562,11 @@ impl Popup for PushPopup {
 
     fn refresh(&mut self, ctx: &Ctx) {
         self.load(ctx);
+    }
+
+    fn poll(&mut self, _ctx: &Ctx) -> Action {
+        self.apply_loaded();
+        Action::None
     }
 
     fn help(&self) -> Vec<KeyHelp> {

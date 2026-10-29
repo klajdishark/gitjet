@@ -165,7 +165,7 @@ fn highlight_one(state: &mut HighlightLines<'static>, content: &str) -> Option<V
     Some(out)
 }
 
-fn convert(st: syntect::highlighting::Style) -> Style {
+pub fn convert(st: syntect::highlighting::Style) -> Style {
     let c = st.foreground;
     let mut s = Style::default().fg(Color::Rgb(c.r, c.g, c.b));
     if st.font_style.contains(FontStyle::BOLD) {

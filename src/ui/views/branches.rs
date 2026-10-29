@@ -4,6 +4,7 @@
 mod compare;
 mod new_branch;
 mod ops;
+mod remote_checkout;
 #[cfg(test)]
 mod tests;
 mod tree;
@@ -24,7 +25,8 @@ use crate::action::Action;
 use crate::ctx::Ctx;
 use crate::git::branch::{self, Branch, Favorites};
 use crate::git::log::{Commit, LogQuery};
-use crate::git::RepoState;
+use crate::git::{Repo, RepoState};
+use crate::ui::bg::{Background, Preview};
 use crate::ui::diff_view::{self, DiffSource};
 use crate::ui::popups::{MenuItem, MenuPopup};
 use crate::ui::widgets::{move_sel, panel, scroll_to_keep_visible, TextInput};
@@ -39,6 +41,29 @@ const DETAIL_COMMITS: usize = 100;
 const DETAIL_MIN_WIDTH: u16 = 100;
 /// The selection must rest this long before the (possibly slow) ahead/behind count starts.
 const VS_CURRENT_DELAY: Duration = Duration::from_millis(150);
+/// How long the selection must rest on a branch before its commits load.
+const DETAIL_DELAY: Duration = Duration::from_millis(60);
+
+type DetailData = Result<Vec<Commit>, String>;
+
+/// What a refresh loads off the UI thread.
+struct Loaded {
+    branches: Vec<Branch>,
+    recent: Vec<String>,
+    favorites: Favorites,
+    head_commit: Option<String>,
+    head_name: Option<String>,
+}
+
+fn load_branches(repo: &Repo) -> anyhow::Result<Loaded> {
+    Ok(Loaded {
+        branches: branch::list_branches(repo)?,
+        recent: branch::recent_branches(repo, 20),
+        favorites: Favorites::load(repo),
+        head_commit: repo.head_commit(),
+        head_name: repo.head_branch(),
+    })
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Focus {
@@ -53,6 +78,8 @@ struct Detail {
     key: Option<String>,
     commits: Vec<Commit>,
     error: Option<String>,
+    /// True until `commits` for `key` arrive
+    loading: bool,
     /// (commits only in the branch, commits only in HEAD) for branches other than the current one
     vs_current: Option<(u32, u32)>,
     /// When the selection settled on `key`; `Some` while the ahead/behind count still has to start
@@ -84,6 +111,9 @@ pub struct BranchesView {
     /// HEAD commit and symbolic branch, cached for the header (detached HEAD, unborn branch)
     head_commit: Option<String>,
     head_name: Option<String>,
+    loader: Background<Result<Loaded, String>>,
+    load_error: Option<String>,
+    details: Preview<String, DetailData>,
 }
 
 impl BranchesView {
@@ -106,7 +136,34 @@ impl BranchesView {
             detail_area: Rect::default(),
             head_commit: None,
             head_name: None,
+            loader: Background::new(),
+            load_error: None,
+            details: Preview::new(DETAIL_DELAY, 32),
         }
+    }
+
+    /// Apply a finished refresh.
+    fn apply_loaded(&mut self) {
+        let Some(res) = self.loader.poll() else {
+            return;
+        };
+        let loaded = match res {
+            Ok(l) => l,
+            Err(e) => {
+                self.load_error = Some(e);
+                return;
+            }
+        };
+        self.load_error = None;
+        let keep = self.rows.get(self.sel).map(|r| r.id(&self.branches));
+        self.branches = loaded.branches;
+        self.recent = loaded.recent;
+        self.favorites = loaded.favorites;
+        self.head_commit = loaded.head_commit;
+        self.head_name = loaded.head_name;
+        self.details.invalidate();
+        self.detail.key = None;
+        self.rebuild_keeping(keep);
     }
 
     fn rebuild(&mut self) {
@@ -205,12 +262,21 @@ impl BranchesView {
         })
     }
 
-    /// Load the details of the selected branch: its recent commits right away (a capped log is cheap),
-    /// the ahead/behind count versus HEAD in the background once the selection rests.
+    /// Load the details of the selected branch in the background once the selection rests: its
+    /// recent commits, then the ahead/behind count versus HEAD.
     fn ensure_detail(&mut self, ctx: &Ctx) {
         let key = self.selected().map(|b| b.full_ref.clone());
         if key != self.detail.key {
             self.load_detail(key, ctx);
+        }
+        if self.detail.loading {
+            if let Some(res) = self.detail.key.as_ref().and_then(|k| self.details.get(k)) {
+                self.detail.loading = false;
+                match res {
+                    Ok(c) => self.detail.commits = c,
+                    Err(e) => self.detail.error = Some(e),
+                }
+            }
         }
         self.poll_vs_current(ctx);
     }
@@ -227,14 +293,14 @@ impl BranchesView {
                 self.detail.vs_due = Some(Instant::now() + VS_CURRENT_DELAY);
             }
             let q = LogQuery {
-                revs: vec![full],
+                revs: vec![full.clone()],
                 max: DETAIL_COMMITS,
                 ..Default::default()
             };
-            match ctx.repo.log(&q) {
-                Ok(c) => self.detail.commits = c,
-                Err(e) => self.detail.error = Some(format!("{e:#}")),
-            }
+            self.detail.loading = true;
+            self.details.request(&ctx.repo, full, move |repo| {
+                repo.log(&q).map_err(|e| format!("{e:#}"))
+            });
         }
     }
 
@@ -272,6 +338,13 @@ impl BranchesView {
 
     fn draw_header(&self, f: &mut Frame, area: Rect, ctx: &Ctx) {
         let t = &ctx.theme;
+        if let Some(e) = &self.load_error {
+            f.render_widget(
+                Line::styled(format!(" {e}"), Style::default().fg(t.error)),
+                area,
+            );
+            return;
+        }
         let mut spans = Vec::new();
         match self.current() {
             Some(b) => {
@@ -531,6 +604,10 @@ impl BranchesView {
                 Paragraph::new(e.as_str()).style(Style::default().fg(t.error)),
                 list,
             );
+            return;
+        }
+        if self.detail.loading {
+            f.render_widget(Paragraph::new("Loading…").style(t.dimmed()), list);
             return;
         }
         self.detail.offset = scroll_to_keep_visible(self.detail.sel, self.detail.offset, h);
@@ -881,15 +958,19 @@ impl View for BranchesView {
     }
 
     fn refresh(&mut self, ctx: &Ctx) -> anyhow::Result<()> {
-        let keep = self.rows.get(self.sel).map(|r| r.id(&self.branches));
-        self.branches = branch::list_branches(&ctx.repo)?;
-        self.recent = branch::recent_branches(&ctx.repo, 20);
-        self.favorites = Favorites::load(&ctx.repo);
-        self.head_commit = ctx.repo.head_commit();
-        self.head_name = ctx.repo.head_branch();
-        self.detail.key = None;
-        self.rebuild_keeping(keep);
+        self.loader.start(&ctx.repo, |repo| {
+            load_branches(repo).map_err(|e| format!("{e:#}"))
+        });
+        self.apply_loaded();
         Ok(())
+    }
+
+    fn poll(&mut self, _ctx: &Ctx) {
+        self.apply_loaded();
+    }
+
+    fn loading(&self) -> bool {
+        self.loader.busy()
     }
 
     fn draw(&mut self, f: &mut Frame, area: Rect, ctx: &Ctx) {

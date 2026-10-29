@@ -315,11 +315,7 @@ impl LocalHistoryView {
             })
             .enabled(path.is_some()),
             MenuItem::new("Open file in editor", "e", move |ctx| match p3 {
-                Some(p) => Action::Suspend(crate::util::editor_command(
-                    ctx.config.editor.as_deref(),
-                    &ctx.repo.path(&p),
-                    None,
-                )),
+                Some(p) => Action::edit(ctx.repo.path(&p), None),
                 None => Action::None,
             })
             .enabled(path.as_ref().is_some_and(|p| ctx.repo.path(p).is_file())),
@@ -548,13 +544,7 @@ impl View for LocalHistoryView {
                 return match key.code {
                     KeyCode::Char('h') => crate::ui::views::files::open_file_history(ctx, &p),
                     KeyCode::Char('b') => crate::ui::views::files::open_blame(ctx, &p, None),
-                    _ if ctx.repo.path(&p).is_file() => {
-                        Action::Suspend(crate::util::editor_command(
-                            ctx.config.editor.as_deref(),
-                            &ctx.repo.path(&p),
-                            None,
-                        ))
-                    }
+                    _ if ctx.repo.path(&p).is_file() => Action::edit(ctx.repo.path(&p), None),
                     _ => Action::Toast(format!("{p} does not exist in the work tree")),
                 };
             }
@@ -676,7 +666,7 @@ impl Popup for FileHistoryPopup {
         let t = &ctx.theme;
         let r = centered_pct(area, 92, 88);
         f.render_widget(Clear, r);
-        let block = panel(format!(" Local history: {} ", self.path), true, t);
+        let block = crate::ui::widgets::dialog(format!(" Local history: {} ", self.path), t);
         let inner = block.inner(r);
         f.render_widget(block, r);
         let [body, keys] =

@@ -4,7 +4,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
+use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthChar;
 
@@ -26,14 +26,32 @@ pub fn centered_pct(area: Rect, pct_x: u16, pct_y: u16) -> Rect {
     centered(area, area.width * pct_x / 100, area.height * pct_y / 100)
 }
 
-/// Standard rounded panel with a title; highlighted border when focused.
+/// A pane inside a view or a fullscreen tool: a thin rule along the top carrying the title (lit
+/// when focused) and a column of padding on each side, so neighbouring panes read as one quiet
+/// line instead of a grid of boxes.
 pub fn panel<'a>(title: impl Into<Line<'a>>, focused: bool, theme: &Theme) -> Block<'a> {
+    Block::default()
+        .borders(Borders::TOP)
+        .border_type(BorderType::Plain)
+        .border_style(theme.border(focused))
+        .padding(Padding::horizontal(1))
+        .title(title.into())
+        .title_style(if focused {
+            theme.title()
+        } else {
+            theme.dimmed()
+        })
+}
+
+/// A floating dialog: a full rounded frame so it stands off the content behind it.
+pub fn dialog<'a>(title: impl Into<Line<'a>>, theme: &Theme) -> Block<'a> {
     Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(theme.border(focused))
+        .border_style(theme.border(true))
+        .padding(Padding::horizontal(1))
         .title(title.into())
-        .title_style(if focused { theme.title() } else { theme.text() })
+        .title_style(theme.title())
 }
 
 /// True if this key event is a printable character to insert (handles AltGr on Windows, which

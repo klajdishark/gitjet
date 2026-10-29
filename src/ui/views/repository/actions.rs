@@ -80,13 +80,16 @@ pub(super) fn new_tag(rev: &str) -> Action {
                 InputPopup::new(format!("Tag {name} at revision"), &rev, move |rev, _| {
                     Action::popup(
                         InputPopup::new(format!("Message for {name}"), "", move |msg, ctx| {
-                            let r = admin::create_tag(&ctx.repo, &name, &rev, &msg);
                             let kind = if msg.trim().is_empty() {
                                 "lightweight"
                             } else {
                                 "annotated"
                             };
-                            Action::from_result(r, format!("Created {kind} tag {name}"))
+                            let ok = format!("Created {kind} tag {name}");
+                            let name = name.clone();
+                            Action::run_op(&ctx.repo, "Creating tag", ok, move |repo| {
+                                admin::create_tag(repo, &name, &rev, &msg)
+                            })
                         })
                         .allow_empty()
                         .prompt(
@@ -133,10 +136,7 @@ fn tag_items(data: &Data, idx: Option<usize>) -> Vec<MenuItem> {
                 "Checkout tag",
                 format!("Check out tag {t3}? HEAD will be detached; create a branch to keep new commits."),
                 move |ctx| {
-                    Action::from_result(
-                        admin::checkout_tag(&ctx.repo, &t3),
-                        format!("Checked out {t3} (detached HEAD)"),
-                    )
+                    Action::run_op(&ctx.repo, "Checking out tag", format!("Checked out {t3} (detached HEAD)"), move |repo| admin::checkout_tag(repo, &t3))
                 },
             ))
         })
@@ -165,7 +165,7 @@ fn tag_items(data: &Data, idx: Option<usize>) -> Vec<MenuItem> {
         MenuItem::new("Delete local tag…", "D", move |_| {
             Action::popup(
                 ConfirmPopup::new("Delete tag", format!("Delete local tag {t5}?"), move |ctx| {
-                    Action::from_result(admin::delete_tag(&ctx.repo, &t5), format!("Deleted tag {t5}"))
+                    Action::run_op(&ctx.repo, "Deleting tag", format!("Deleted tag {t5}"), move |repo| admin::delete_tag(repo, &t5))
                 })
                 .danger(),
             )
@@ -210,9 +210,11 @@ pub(super) fn add_remote(ctx: &Ctx) -> Action {
             let name = name.trim().to_string();
             Action::popup(
                 InputPopup::new(format!("URL of {name}"), "", move |url, ctx| {
-                    Action::from_result(
-                        admin::add_remote(&ctx.repo, &name, &url),
+                    Action::run_op(
+                        &ctx.repo,
+                        "Adding remote",
                         format!("Added remote {name}"),
+                        move |repo| admin::add_remote(repo, &name, &url),
                     )
                 })
                 .prompt("https://host/owner/repo.git, git@host:owner/repo.git or a local path"),
@@ -244,10 +246,7 @@ fn remote_items(data: &Data, idx: Option<usize>) -> Vec<MenuItem> {
             let old = n4.clone();
             Action::popup(InputPopup::new(format!("Rename remote {old}"), &n4, move |new, ctx| {
                 let new = new.trim().to_string();
-                Action::from_result(
-                    admin::rename_remote(&ctx.repo, &old, &new),
-                    format!("Renamed {old} to {new}"),
-                )
+                Action::run_op(&ctx.repo, "Renaming remote", format!("Renamed {old} to {new}"), move |repo| admin::rename_remote(repo, &old, &new))
             }))
         })
         .enabled(has),
@@ -257,7 +256,7 @@ fn remote_items(data: &Data, idx: Option<usize>) -> Vec<MenuItem> {
                     "Remove remote",
                     format!("Remove remote {n5}? Its remote-tracking branches and settings are deleted."),
                     move |ctx| {
-                        Action::from_result(admin::remove_remote(&ctx.repo, &n5), format!("Removed remote {n5}"))
+                        Action::run_op(&ctx.repo, "Removing remote", format!("Removed remote {n5}"), move |repo| admin::remove_remote(repo, &n5))
                     },
                 )
                 .danger(),
@@ -289,9 +288,11 @@ fn edit_url(name: String, current: String, push: bool) -> Action {
     };
     Action::popup(InputPopup::new(title, &current, move |url, ctx| {
         let what = if push { "push URL" } else { "URL" };
-        Action::from_result(
-            admin::set_remote_url(&ctx.repo, &name, &url, push),
+        Action::run_op(
+            &ctx.repo,
+            "Updating remote URL",
             format!("Updated {what} of {name}"),
+            move |repo| admin::set_remote_url(repo, &name, &url, push),
         )
     }))
 }
@@ -417,11 +418,11 @@ fn worktree_items(data: &Data, idx: Option<usize>) -> Vec<MenuItem> {
         .enabled(removable),
         MenuItem::new(lock_label, "l", move |ctx| {
             if locked {
-                return Action::from_result(admin::unlock_worktree(&ctx.repo, &p3), "Worktree unlocked");
+                return Action::run_op(&ctx.repo, "Unlocking worktree", "Worktree unlocked", move |repo| admin::unlock_worktree(repo, &p3));
             }
             Action::popup(
                 InputPopup::new("Lock worktree", "", move |reason, ctx| {
-                    Action::from_result(admin::lock_worktree(&ctx.repo, &p3, &reason), "Worktree locked")
+                    Action::run_op(&ctx.repo, "Locking worktree", "Worktree locked", move |repo| admin::lock_worktree(repo, &p3, &reason))
                 })
                 .allow_empty()
                 .prompt("Optional reason (e.g. \"on a removable drive\"); locked worktrees are never pruned"),
@@ -508,13 +509,17 @@ fn submodule_items(data: &Data, idx: Option<usize>, ctx: &Ctx) -> Vec<MenuItem> 
     let p1 = path.clone();
     vec![
         MenuItem::new("Open submodule", "Enter", move |_| Action::SwitchRepo(abs)).enabled(initialized),
-        MenuItem::new("Init", "i", |ctx| {
-            Action::from_result(admin::submodule_init(&ctx.repo), "Submodules initialized")
+        MenuItem::new("Init", "i", |_| {
+            Action::spawn("Init submodules", |repo| {
+                admin::submodule_init(repo).map(|_| "Submodules initialized".into())
+            })
         })
         .enabled(any),
         MenuItem::new("Update (init, recursive)", "u", |_| update_submodules()).enabled(any),
-        MenuItem::new("Sync URLs", "s", |ctx| {
-            Action::from_result(admin::submodule_sync(&ctx.repo), "Submodule URLs synchronized")
+        MenuItem::new("Sync URLs", "s", |_| {
+            Action::spawn("Sync submodule URLs", |repo| {
+                admin::submodule_sync(repo).map(|_| "Submodule URLs synchronized".into())
+            })
         })
         .enabled(any),
         MenuItem::new("Add submodule…", "n", |_| add_submodule()),
@@ -523,8 +528,10 @@ fn submodule_items(data: &Data, idx: Option<usize>, ctx: &Ctx) -> Vec<MenuItem> 
                 ConfirmPopup::new(
                     "Deinit submodule",
                     format!("Unregister {p1} and remove its work tree? Local changes inside it are lost."),
-                    move |ctx| {
-                        Action::from_result(admin::submodule_deinit(&ctx.repo, &p1), format!("Deinitialized {p1}"))
+                    move |_| {
+                        Action::spawn("Deinit submodule", move |repo| {
+                            admin::submodule_deinit(repo, &p1).map(|_| format!("Deinitialized {p1}"))
+                        })
                     },
                 )
                 .danger(),
@@ -543,9 +550,11 @@ fn add_pattern(file: IgnoreFile) -> Action {
             "",
             move |pattern, ctx| {
                 let p = pattern.trim().to_string();
-                Action::from_result(
-                    admin::add_ignore_pattern(&ctx.repo, file, &p),
+                Action::run_op(
+                    &ctx.repo,
+                    "Updating ignore file",
                     format!("Added {p} to {}", file.label()),
+                    move |repo| admin::add_ignore_pattern(repo, file, &p),
                 )
             },
         )
@@ -583,12 +592,22 @@ fn check_path() -> Action {
 const MAX_IGNORED_SHOWN: usize = 2000;
 
 fn show_ignored(ctx: &Ctx) -> Action {
-    match ctx.repo.ignored_files() {
+    let theme = ctx.theme.clone();
+    Action::run(
+        &ctx.repo,
+        "Listing ignored files",
+        |repo| repo.ignored_files(),
+        move |r| ignored_popup(r, &theme),
+    )
+}
+
+fn ignored_popup(r: anyhow::Result<Vec<String>>, theme: &crate::theme::Theme) -> Action {
+    match r {
         Ok(files) if files.is_empty() => Action::Toast("No ignored files in the work tree".into()),
         Ok(files) => {
             let mut lines: Vec<Line<'static>> = vec![Line::styled(
                 format!("{} ignored:", plural(files.len(), "file")),
-                ctx.theme.title(),
+                theme.title(),
             )];
             lines.extend(
                 files
@@ -599,7 +618,7 @@ fn show_ignored(ctx: &Ctx) -> Action {
             if files.len() > MAX_IGNORED_SHOWN {
                 lines.push(Line::styled(
                     format!("… and {} more", files.len() - MAX_IGNORED_SHOWN),
-                    ctx.theme.dimmed(),
+                    theme.dimmed(),
                 ));
             }
             Action::popup(MessagePopup::from_lines("Ignored files", lines))
@@ -618,11 +637,7 @@ fn edit_file(ctx: &Ctx, file: IgnoreFile, line: Option<usize>) -> Action {
             return Action::error(format!("creating {}: {e}", path.display()));
         }
     }
-    Action::Suspend(crate::util::editor_command(
-        ctx.config.editor.as_deref(),
-        &path,
-        line,
-    ))
+    Action::edit(path, line)
 }
 
 fn ignore_items(data: &Data, idx: Option<usize>) -> Vec<MenuItem> {
@@ -652,9 +667,11 @@ fn ignore_items(data: &Data, idx: Option<usize>) -> Vec<MenuItem> {
                         r.file.label()
                     ),
                     move |ctx| {
-                        Action::from_result(
-                            admin::remove_ignore_rule(&ctx.repo, &r),
+                        Action::run_op(
+                            &ctx.repo,
+                            "Updating ignore file",
                             format!("Removed {}", r.pattern),
+                            move |repo| admin::remove_ignore_rule(repo, &r),
                         )
                     },
                 )
@@ -695,7 +712,9 @@ fn edit_config(key: String, current: String, scope: ConfigScope) -> Action {
                 } else {
                     format!("Set {scope_name} {key} = {}", value.trim())
                 };
-                Action::from_result(admin::set_config(&ctx.repo, scope, &key, &value), msg)
+                Action::run_op(&ctx.repo, "Updating config", msg, move |repo| {
+                    admin::set_config(repo, scope, &key, &value)
+                })
             },
         )
         .allow_empty()
@@ -727,19 +746,17 @@ fn config_items(data: &Data, idx: Option<usize>) -> Vec<MenuItem> {
         })
         .enabled(has),
         MenuItem::new("Unset repository value", "x", move |ctx| {
-            Action::from_result(
-                admin::set_config(&ctx.repo, ConfigScope::Local, &k4, ""),
+            Action::run_op(
+                &ctx.repo,
+                "Updating config",
                 format!("Unset repository {k4}"),
+                move |repo| admin::set_config(repo, ConfigScope::Local, &k4, ""),
             )
         })
         .enabled(has_local),
         MenuItem::new("Open repository config in editor", "o", |ctx| {
             let path = ctx.repo.common_dir.join("config");
-            Action::Suspend(crate::util::editor_command(
-                ctx.config.editor.as_deref(),
-                &path,
-                None,
-            ))
+            Action::edit(path, None)
         }),
     ]
 }

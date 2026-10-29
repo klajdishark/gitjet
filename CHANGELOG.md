@@ -7,6 +7,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-28
+
+### Changed
+
+- Checking out a branch takes it from the remote as-is (`[branches] checkout_from_remote`, on by
+  default): gitjet fetches that branch, then creates or resets the local branch to the remote one
+  and tracks it. A dialog shows each step (looking up, fetching, comparing, switching). When the
+  local branch has commits that are not on the remote, gitjet asks whether to reset it or check
+  out the local branch as it is. Offline, the last fetched state is used. Set the option to
+  `false` for the previous behavior.
+
+## [0.1.2] - 2026-10-28
+
+### Changed
+
+- Tabs load in the background: Changes, Branches, Conflicts, Shelf, Files and Repository no
+  longer freeze the screen while git runs (50–150 ms per git command on Windows). The status bar
+  shows a spinner ("Loading Changes") and panes show "Loading…" until data arrives.
+- Diff previews (Changes, Shelf) and branch details load once the selection rests, so holding an
+  arrow key no longer runs git for every row.
+- Refresh requests are combined (one refresh per screen update), and returning to the terminal
+  window refreshes at most once a second.
+- Submodule init / sync / deinit, aborting a rebase and "Get revision" in file history run in the
+  background with a spinner.
+- Creating a branch runs in the background: the New branch dialog shows each step ("Creating
+  feature and switching to it…") with a spinner and elapsed time, and errors stay inline.
+
+### Fixed
+
+- A branch created from a remote branch (for example from `origin/main`) no longer tracks it, so
+  its first push publishes it under its own name instead of pushing to `origin/main`. The dialog
+  says so. Overwriting an existing branch keeps that branch's upstream.
+
+### Added
+
+- `GITJET_TRACE=<file>` logs every git command with its duration and whether the screen waited
+  for it.
+- `GITJET_GIT=<path>` selects the git executable (skips package manager shims on Windows).
+
 ## [0.1.1] - 2026-10-27
 
 ### Changed
@@ -169,6 +208,8 @@ Initial release.
 - Repository switcher for the parent repository, worktrees, submodules, nested and recent
   repositories; clone and init from inside the app.
 
-[Unreleased]: https://github.com/klajdishark/gitjet/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/kashari/gitjet/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/kashari/gitjet/compare/v0.1.2...v0.1.4
+[0.1.2]: https://github.com/kashari/gitjet/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/klajdishark/gitjet/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/klajdishark/gitjet/releases/tag/v0.1.0

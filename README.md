@@ -13,7 +13,7 @@ as a **single binary**, and works with **any Git hosting provider**.
 |---|---|
 | **Changes** (commit window) | Changelists, unversioned files, staged/partial indicators, diff preview, stage/unstage files, **partial staging by line or hunk**, discard selected lines, rollback, add to `.gitignore` |
 | **Commit** | Message editor with subject-length hint, message history, amend, sign-off, GPG/SSH signing, author override, **commit checks** (your own commands run before committing), commit and push |
-| **Diff viewer** | Unified and **side-by-side**, word-level highlighting, syntax highlighting, ignore whitespace, more/less context, jump between changes, open in your editor at the line |
+| **Diff viewer** | Unified and **side-by-side**, word-level highlighting, syntax highlighting, ignore whitespace, more/less context, jump between changes, open the file at the line in the built-in Vim-style editor |
 | **Log** | Commit graph, refs and tags, filters (branch, user, date, path, text, content), details pane, cherry-pick, revert, reset (soft/mixed/hard/keep), undo commit, edit message, new branch/tag here, copy hash |
 | **Branches** | Recent, favorites, local and remote branches with ahead/behind, checkout (smart checkout with stash), new, rename, delete, merge (no-ff/squash/ff-only), rebase onto, compare with current, set upstream |
 | **Fetch / Pull / Push** | Background fetch, pull (merge/rebase/ff-only), Update Project, **push dialog with the commits to push**, force-with-lease, push tags, "in terminal" variants for password/SSH prompts |
@@ -22,6 +22,7 @@ as a **single binary**, and works with **any Git hosting provider**.
 | **Stash & Shelf** | Stash with untracked/keep-index, apply/pop/drop/branch; **shelf** with partial unshelve; create and apply patch files |
 | **Files** | Project tree, **annotate (blame)** with age colors, annotate previous revision, file history across renames, **history for selected lines**, file at revision, restore revision |
 | **Pull requests** | List, review diff, checkout, create, comment, approve/request changes, merge, close/reopen — GitHub, GitLab, Bitbucket, Azure DevOps, Gitea/Forgejo and self-hosted servers |
+| **Editor** | Built-in Vim-style editor that works the same on every platform: normal / insert / visual modes, motions, operators and text objects, registers, undo/redo, `.` repeat, `/` search, `:%s/pat/rep/g`, `:g/pat/d`, `:sort`, `:normal`, syntax highlighting (`:help` lists the commands) |
 | **Local History** | Automatic snapshots of changed files, independent of commits; labels; diff against now; revert a file to any snapshot |
 | **Repository** | Tags, remotes, worktrees, submodules, ignore rules, config, **repository switcher** (worktrees, submodules, nested and recent repos), clone, init |
 | **Everywhere** | `:` action palette to search every action, `?` help for every screen, mouse support, light and dark themes |
@@ -54,23 +55,23 @@ gitjet is one executable. You need [Git](https://git-scm.com) installed.
 **Windows** (PowerShell):
 
 ```powershell
-irm https://github.com/klajdishark/gitjet/releases/latest/download/install.ps1 | iex
+irm https://github.com/kashari/gitjet/releases/latest/download/install.ps1 | iex
 ```
 
 **macOS / Linux**:
 
 ```bash
-curl -fsSL https://github.com/klajdishark/gitjet/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/kashari/gitjet/releases/latest/download/install.sh | sh
 ```
 
 **Manual**: download the archive for your platform from the
-[releases page](https://github.com/klajdishark/gitjet/releases), unpack it, and put `gitjet`
+[releases page](https://github.com/kashari/gitjet/releases), unpack it, and put `gitjet`
 (`gitjet.exe` on Windows) somewhere on your `PATH`.
 
 **From source** (Rust 1.80+):
 
 ```bash
-cargo install --git https://github.com/klajdishark/gitjet
+cargo install --git https://github.com/kashari/gitjet
 ```
 
 | Platform | Archive |
@@ -144,7 +145,8 @@ on macOS, and `~/.config/gitjet/config.toml` on Linux.
 ```toml
 theme = "dark"            # or "light"
 mouse = true
-# editor = "code --wait"  # defaults to $VISUAL, $EDITOR, then notepad / vi
+builtin_editor = true     # open files in gitjet's built-in Vim-style editor
+# editor = "code --wait"  # used when builtin_editor = false; defaults to $VISUAL, $EDITOR, then notepad / vi
 
 [diff]
 side_by_side = false

@@ -1,6 +1,6 @@
 //! Colors and common styles. Always take colors from here so light/dark both work.
 
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Color, Style};
 
 #[derive(Debug, Clone)]
 pub struct Theme {
@@ -51,9 +51,9 @@ impl Theme {
             fg: Color::Rgb(0xd4, 0xd7, 0xdd),
             dim: Color::Rgb(0x7f, 0x84, 0x8e),
             accent: Color::Rgb(0x6c, 0xa9, 0xf2),
-            border: Color::Rgb(0x4a, 0x4f, 0x58),
+            border: Color::Rgb(0x3a, 0x3e, 0x46),
             border_focus: Color::Rgb(0x6c, 0xa9, 0xf2),
-            selection_bg: Color::Rgb(0x2e, 0x43, 0x6e),
+            selection_bg: Color::Rgb(0x26, 0x36, 0x55),
             added: Color::Rgb(0x73, 0xc9, 0x91),
             removed: Color::Rgb(0xf0, 0x71, 0x78),
             modified: Color::Rgb(0x6c, 0xa9, 0xf2),
@@ -95,7 +95,7 @@ impl Theme {
             fg: Color::Rgb(0x24, 0x29, 0x2f),
             dim: Color::Rgb(0x6e, 0x77, 0x81),
             accent: Color::Rgb(0x09, 0x69, 0xda),
-            border: Color::Rgb(0xc8, 0xcd, 0xd3),
+            border: Color::Rgb(0xd8, 0xdc, 0xe0),
             border_focus: Color::Rgb(0x09, 0x69, 0xda),
             selection_bg: Color::Rgb(0xcc, 0xe0, 0xff),
             added: Color::Rgb(0x1a, 0x7f, 0x37),
@@ -142,16 +142,13 @@ impl Theme {
         Style::default().fg(self.dim)
     }
 
+    /// Selection is shown by its background alone; text keeps its regular weight.
     pub fn selected(&self) -> Style {
-        Style::default()
-            .bg(self.selection_bg)
-            .add_modifier(Modifier::BOLD)
+        Style::default().bg(self.selection_bg)
     }
 
     pub fn title(&self) -> Style {
-        Style::default()
-            .fg(self.accent)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(self.accent)
     }
 
     pub fn border(&self, focused: bool) -> Style {
@@ -163,8 +160,6 @@ impl Theme {
     }
 
     pub fn key(&self) -> Style {
-        Style::default()
-            .fg(self.accent)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(self.accent)
     }
 }

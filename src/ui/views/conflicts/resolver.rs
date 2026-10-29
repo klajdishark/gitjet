@@ -671,10 +671,7 @@ impl MergeResolver {
     fn draw_header(&self, f: &mut Frame, area: Rect, t: &Theme) {
         let mut spans = vec![
             Span::styled(" Merge ", t.title().add_modifier(Modifier::REVERSED)),
-            Span::styled(
-                format!(" {} ", self.path),
-                t.text().add_modifier(Modifier::BOLD),
-            ),
+            Span::styled(format!(" {} ", self.path), t.text()),
             Span::styled(format!("— {}", self.kind.label()), t.dimmed()),
         ];
         if self.dirty {
@@ -817,7 +814,7 @@ impl MergeResolver {
 
     fn draw_choice(&self, f: &mut Frame, body: Rect, c: &Choice, t: &Theme) {
         let r = centered(body, body.width.min(100), body.height);
-        let block = panel(" Choose a version ", true, t);
+        let block = crate::ui::widgets::dialog(" Choose a version ", t);
         let inner = block.inner(r);
         f.render_widget(block, r);
         let size = |s: Option<usize>| match s {
@@ -915,11 +912,7 @@ fn write_and_edit(
 /// Open the work-tree file in the external editor; it is reloaded as the result on the next refresh.
 fn open_editor(ctx: &Ctx, path: &str, line: Option<usize>, shared: &Shared) -> Action {
     shared.reload.set(true);
-    Action::Suspend(util::editor_command(
-        ctx.config.editor.as_deref(),
-        &ctx.repo.path(path),
-        line,
-    ))
+    Action::edit(ctx.repo.path(path), line)
 }
 
 fn capitalize(s: &str) -> String {
@@ -1332,7 +1325,7 @@ mod tests {
 
     fn has_suspend(a: &Action) -> bool {
         match a {
-            Action::Suspend(_) => true,
+            Action::Edit { .. } => true,
             Action::Batch(v) => v.iter().any(has_suspend),
             _ => false,
         }

@@ -32,6 +32,8 @@ use crate::action::Action;
 use crate::ctx::Ctx;
 use crate::git::file_history::{is_binary, text_lines};
 use crate::git::status::FileState;
+use crate::git::Repo;
+use crate::ui::bg::Background;
 use crate::ui::diff_view::{self, DiffSource};
 use crate::ui::popups::{InputPopup, MenuItem, MenuPopup};
 use crate::ui::widgets::{panel, TextInput};
@@ -78,6 +80,8 @@ pub struct FilesView {
     list_area: Rect,
     preview_area: Rect,
     pending: Rc<Cell<Option<ViewCmd>>>,
+    loader: Background<Result<Vec<FileItem>, String>>,
+    load_error: Option<String>,
 }
 
 impl FilesView {
@@ -97,6 +101,8 @@ impl FilesView {
             list_area: Rect::default(),
             preview_area: Rect::default(),
             pending: Rc::new(Cell::new(None)),
+            loader: Background::new(),
+            load_error: None,
         }
     }
 
@@ -316,6 +322,24 @@ impl FilesView {
         Action::popup(MenuPopup::new(truncate(&r.path, 50), items))
     }
 
+    /// Apply a finished refresh.
+    fn apply_loaded(&mut self) {
+        let Some(res) = self.loader.poll() else {
+            return;
+        };
+        match res {
+            Ok(items) => {
+                self.load_error = None;
+                let keep = self.selected().map(|r| r.path.clone());
+                self.items = items;
+                self.root = tree::build(&self.items);
+                self.preview = None;
+                self.rebuild(keep);
+            }
+            Err(e) => self.load_error = Some(e),
+        }
+    }
+
     /// Load the preview for the selected row if it changed.
     fn update_preview(&mut self, ctx: &Ctx) {
         let Some(r) = self.selected().cloned() else {
@@ -364,8 +388,17 @@ impl FilesView {
             self.filter.render(f, r, t.text(), self.filter_focus);
         }
         self.list_area = list;
+        if let Some(e) = &self.load_error {
+            f.render_widget(
+                Paragraph::new(e.as_str()).style(Style::default().fg(t.error)),
+                list,
+            );
+            return;
+        }
         if self.rows.is_empty() {
-            let msg = if self.filtering() {
+            let msg = if self.loader.busy() {
+                "Loading…"
+            } else if self.filtering() {
                 "No files match"
             } else {
                 "No files in this repository"
@@ -653,9 +686,9 @@ fn with_path(
 }
 
 /// Load the file list: tracked files plus untracked ones, with status.
-fn load_items(ctx: &Ctx) -> anyhow::Result<Vec<FileItem>> {
-    let tracked = tracked_files(ctx)?;
-    let status = ctx.repo.status()?;
+fn load_items(repo: &Repo) -> anyhow::Result<Vec<FileItem>> {
+    let tracked = tracked_files(repo)?;
+    let status = repo.status()?;
     let mut states: HashMap<String, FileState> = HashMap::new();
     let mut untracked = Vec::new();
     for e in status.entries.iter().filter(|e| !e.is_ignored()) {
@@ -689,12 +722,19 @@ impl View for FilesView {
     }
 
     fn refresh(&mut self, ctx: &Ctx) -> anyhow::Result<()> {
-        let keep = self.selected().map(|r| r.path.clone());
-        self.items = load_items(ctx)?;
-        self.root = tree::build(&self.items);
-        self.preview = None;
-        self.rebuild(keep);
+        self.loader.start(&ctx.repo, |repo| {
+            load_items(repo).map_err(|e| format!("{e:#}"))
+        });
+        self.apply_loaded();
         Ok(())
+    }
+
+    fn poll(&mut self, _ctx: &Ctx) {
+        self.apply_loaded();
+    }
+
+    fn loading(&self) -> bool {
+        self.loader.busy()
     }
 
     fn draw(&mut self, f: &mut Frame, area: Rect, ctx: &Ctx) {
@@ -936,8 +976,8 @@ fn ask_compare_with_revision(_ctx: &Ctx, path: &str) -> Action {
 
 type Pick = Rc<dyn Fn(&Ctx, String) -> Action>;
 
-fn tracked_files(ctx: &Ctx) -> anyhow::Result<Vec<String>> {
-    let out = ctx.repo.run_bytes(&["ls-files", "-z", "--cached"])?;
+fn tracked_files(repo: &Repo) -> anyhow::Result<Vec<String>> {
+    let out = repo.run_bytes(&["ls-files", "-z", "--cached"])?;
     let mut seen = HashSet::new();
     Ok(String::from_utf8_lossy(&out)
         .split('\0')
@@ -979,7 +1019,7 @@ fn choose_file(title: &str, files: Vec<String>, pick: Pick) -> Action {
 }
 
 fn choose_tracked(ctx: &Ctx, title: &str, pick: Pick) -> Action {
-    match tracked_files(ctx) {
+    match tracked_files(&ctx.repo) {
         Ok(files) => choose_file(title, files, pick),
         Err(e) => Action::Error(format!("{e:#}")),
     }
@@ -1190,7 +1230,7 @@ mod tests {
         let abs = ctx.repo.path("src/main.rs").to_string_lossy().into_owned();
         assert_eq!(normalize_path(&ctx, &abs), "src/main.rs");
         assert_eq!(files_at_revision(&ctx, "HEAD").unwrap().len(), 3);
-        assert_eq!(tracked_files(&ctx).unwrap().len(), 3);
+        assert_eq!(tracked_files(&ctx.repo).unwrap().len(), 3);
         assert_eq!(palette().len(), 5);
     }
 

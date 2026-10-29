@@ -140,7 +140,7 @@ impl Editors {
     pub fn production() -> Self {
         Self {
             sequence: Box::new(crate::util::write_file_editor),
-            message: crate::util::noop_editor(),
+            message: crate::util::noop_editor().to_string(),
         }
     }
 }

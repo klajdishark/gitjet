@@ -622,11 +622,11 @@ impl Snapshot {
             if rev_path != dest { format!(" (then named {rev_path})") } else { String::new() }
         );
         Action::popup(
-            ConfirmPopup::new("Get revision", msg, move |ctx| {
-                Action::from_result(
-                    ctx.repo.restore_file(&rev, &rev_path, &dest),
-                    format!("Restored {dest} from {short}"),
-                )
+            ConfirmPopup::new("Get revision", msg, move |_| {
+                Action::spawn("Get revision", move |repo| {
+                    repo.restore_file(&rev, &rev_path, &dest)
+                        .map(|_| format!("Restored {dest} from {short}"))
+                })
             })
             .danger(),
         )

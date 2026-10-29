@@ -3,7 +3,7 @@
 
 use std::time::Instant;
 
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -16,11 +16,9 @@ use crate::util::{fit, relative_time, truncate};
 
 use super::state::Setup;
 
-const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-
 /// Spinner frame for an operation started at `since`.
 pub fn spinner(since: Instant) -> &'static str {
-    SPINNER[(since.elapsed().as_millis() / 100) as usize % SPINNER.len()]
+    crate::app::spinner_frame(since)
 }
 
 /// Greedy word wrap to `width` display columns. Input lines (LF or CRLF) are kept; words longer
@@ -215,7 +213,7 @@ fn summary_lines(
 ) {
     let title = format!("{} {}", h.reference(pr.number), pr.title);
     for l in wrap_text(&title, width) {
-        out.push(Line::styled(l, t.text().add_modifier(Modifier::BOLD)));
+        out.push(Line::styled(l, t.text()));
     }
     let (glyph, gstyle) = state_marker(pr, t);
     let mut meta = vec![Span::styled(
@@ -435,7 +433,7 @@ pub fn detail_lines(
     for c in &d.comments {
         let mut spans = vec![Span::styled(
             format!("  {}", c.author),
-            Style::default().fg(t.author).add_modifier(Modifier::BOLD),
+            Style::default().fg(t.author),
         )];
         if let Some(ts) = c.created {
             spans.push(Span::styled(

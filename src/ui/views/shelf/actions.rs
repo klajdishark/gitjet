@@ -81,8 +81,7 @@ pub fn apply_stash_dialog(entry: &StashEntry, pop: bool) -> Action {
 }
 
 /// Apply or pop `stash@{index}` (which must still be the stash `hash`) and turn the outcome into
-/// toasts / a tab switch. Runs in the foreground because conflicts switch to the Conflicts tab,
-/// which a background task cannot request.
+/// toasts / a tab switch (git runs in the background).
 pub fn run_unstash(
     repo: &Repo,
     index: usize,
@@ -90,13 +89,24 @@ pub fn run_unstash(
     pop: bool,
     restore_index: bool,
 ) -> Action {
-    let r = stash::ensure_unchanged(repo, index, hash).and_then(|()| {
-        if pop {
-            stash::pop(repo, index, restore_index)
-        } else {
-            stash::apply(repo, index, restore_index)
-        }
-    });
+    let hash = hash.to_string();
+    let label = format!("{} stash", if pop { "Popping" } else { "Applying" });
+    Action::run(
+        repo,
+        label,
+        move |repo| {
+            stash::ensure_unchanged(repo, index, &hash)?;
+            if pop {
+                stash::pop(repo, index, restore_index)
+            } else {
+                stash::apply(repo, index, restore_index)
+            }
+        },
+        move |r| unstash_outcome_action(r, index, pop),
+    )
+}
+
+fn unstash_outcome_action(r: anyhow::Result<StashApplyOutcome>, index: usize, pop: bool) -> Action {
     match r {
         Ok(StashApplyOutcome::Clean) => Action::Batch(vec![
             Action::Toast(format!(
@@ -370,10 +380,16 @@ pub fn unshelve_files(ctx: &Ctx, id: &str, paths: Vec<String>) -> Action {
 }
 
 fn run_unshelve(repo: &Repo, id: &str, paths: &[String], overwrite: bool) -> Action {
-    match shelf::unshelve(repo, id, paths, overwrite) {
-        Ok(o) => unshelve_outcome_action(&o),
-        Err(e) => Action::Batch(vec![Action::Error(format!("{e:#}")), Action::Refresh]),
-    }
+    let (id, paths) = (id.to_string(), paths.to_vec());
+    Action::run(
+        repo,
+        "Unshelving",
+        move |repo| shelf::unshelve(repo, &id, &paths, overwrite),
+        |r| match r {
+            Ok(o) => unshelve_outcome_action(&o),
+            Err(e) => Action::Batch(vec![Action::Error(format!("{e:#}")), Action::Refresh]),
+        },
+    )
 }
 
 fn unshelve_outcome_action(o: &UnshelveOutcome) -> Action {
@@ -426,7 +442,12 @@ pub fn delete_shelf(entry: &ShelfEntry) -> Action {
     );
     Action::popup(
         ConfirmPopup::new("Delete Shelved Changes", msg, move |ctx| {
-            Action::from_result(shelf::delete(&ctx.repo, &id), "Shelved changes deleted")
+            Action::run_op(
+                &ctx.repo,
+                "Deleting shelf",
+                "Shelved changes deleted",
+                move |repo| shelf::delete(repo, &id),
+            )
         })
         .danger(),
     )
@@ -447,12 +468,11 @@ pub fn delete_applied(ctx: &Ctx) -> Action {
                 "Delete {n} {} that were already unshelved?",
                 if n == 1 { "entry" } else { "entries" }
             ),
-            |ctx| match shelf::delete_applied(&ctx.repo) {
-                Ok(n) => Action::Batch(vec![
-                    Action::Toast(format!("Deleted {n} unshelved entries")),
-                    Action::Refresh,
-                ]),
-                Err(e) => Action::Batch(vec![Action::Error(format!("{e:#}")), Action::Refresh]),
+            |_| {
+                Action::spawn("Cleaning up shelf", |repo| {
+                    let n = shelf::delete_applied(repo)?;
+                    Ok(format!("Deleted {n} unshelved entries"))
+                })
             },
         )
         .danger(),
@@ -465,7 +485,11 @@ pub fn rename_shelf(entry: &ShelfEntry) -> Action {
     Action::popup(InputPopup::new(
         "Rename Shelved Changes",
         &entry.meta.name,
-        move |name, ctx| Action::from_result(shelf::rename(&ctx.repo, &id, &name), "Renamed"),
+        move |name, ctx| {
+            Action::run_op(&ctx.repo, "Renaming shelf", "Renamed", move |repo| {
+                shelf::rename(repo, &id, &name)
+            })
+        },
     ))
 }
 
@@ -614,7 +638,17 @@ pub fn preview_patch(path: &Path) -> Action {
 
 /// Apply a patch file and report the outcome.
 pub fn apply_patch_file(repo: &Repo, path: &Path) -> Action {
-    match patch::apply_patch_file(repo, path) {
+    let path = path.to_path_buf();
+    Action::run(
+        repo,
+        "Applying patch",
+        move |repo| patch::apply_patch_file(repo, &path),
+        patch_outcome_action,
+    )
+}
+
+fn patch_outcome_action(r: anyhow::Result<PatchFileOutcome>) -> Action {
+    match r {
         Ok(PatchFileOutcome::Applied(ApplyOutcome::Clean)) => Action::Batch(vec![
             Action::Toast("Patch applied to the work tree".into()),
             Action::Refresh,

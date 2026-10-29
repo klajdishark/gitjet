@@ -1,11 +1,11 @@
 # Install the gitjet binary on Windows (no installer, no admin rights).
-#   irm https://github.com/klajdishark/gitjet/releases/latest/download/install.ps1 | iex
+#   irm https://github.com/kashari/gitjet/releases/latest/download/install.ps1 | iex
 # Options (environment variables):
 #   GITJET_INSTALL_DIR  where to put gitjet.exe (default: %LOCALAPPDATA%\Programs\gitjet)
 #   GITJET_VERSION      tag to install, e.g. v0.1.0 (default: latest)
 $ErrorActionPreference = 'Stop'
 
-$repo = if ($env:GITJET_REPO) { $env:GITJET_REPO } else { 'klajdishark/gitjet' }
+$repo = if ($env:GITJET_REPO) { $env:GITJET_REPO } else { 'kashari/gitjet' }
 $installDir = if ($env:GITJET_INSTALL_DIR) { $env:GITJET_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs\gitjet' }
 
 $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'aarch64' } else { 'x86_64' }

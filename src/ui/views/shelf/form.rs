@@ -10,7 +10,7 @@ use ratatui::Frame;
 
 use crate::action::Action;
 use crate::ctx::Ctx;
-use crate::ui::widgets::{centered, panel, scroll_to_keep_visible, TextInput};
+use crate::ui::widgets::{centered, dialog, scroll_to_keep_visible, TextInput};
 use crate::ui::{KeyHelp, Popup};
 
 /// Maximum checklist rows shown at once.
@@ -244,7 +244,7 @@ impl Popup for FormPopup {
         let t = &ctx.theme;
         let r = centered(area, 76, self.height().min(area.height));
         f.render_widget(Clear, r);
-        let block = panel(format!(" {} ", self.title), true, t);
+        let block = dialog(format!(" {} ", self.title), t);
         let inner = block.inner(r);
         f.render_widget(block, r);
         let cur = self.current();

@@ -12,7 +12,7 @@ use crate::action::Action;
 use crate::ctx::Ctx;
 use crate::git::compare::RefEntry;
 use crate::ui::popups::fuzzy_match;
-use crate::ui::widgets::{centered, move_sel, panel, TextInput};
+use crate::ui::widgets::{centered, dialog, move_sel, TextInput};
 use crate::ui::{KeyHelp, Popup};
 
 /// What a row of the chooser does when picked.
@@ -113,7 +113,7 @@ impl Popup for RefChooser {
         let height = (rows as u16 + 4).clamp(6, 24);
         let r = centered(area, width, height);
         f.render_widget(Clear, r);
-        let block = panel(format!(" {} ", self.title), true, t);
+        let block = dialog(format!(" {} ", self.title), t);
         let inner = block.inner(r);
         f.render_widget(block, r);
         let [input_area, _, list_area] = Layout::vertical([

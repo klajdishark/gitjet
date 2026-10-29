@@ -27,9 +27,12 @@ pub mod remote;
 pub mod shelf;
 pub mod stash;
 
+use std::ffi::OsString;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -72,7 +75,7 @@ impl RepoState {
 impl Repo {
     /// Find the repository containing `path`.
     pub fn discover(path: &Path) -> Result<Repo> {
-        let out = Command::new("git")
+        let out = Command::new(git_program())
             .arg("-C")
             .arg(path)
             .args([
@@ -110,7 +113,7 @@ impl Repo {
     /// A `git` command preconfigured for this repo: runs in the root, never prompts on the terminal,
     /// never opens an interactive editor (git's proposed message is accepted), no colors, UTF-8 paths.
     pub fn command(&self) -> Command {
-        let mut c = Command::new("git");
+        let mut c = Command::new(git_program());
         c.arg("-C")
             .arg(&self.root)
             .args(["-c", "core.quotepath=false", "-c", "color.ui=false"])
@@ -155,6 +158,7 @@ impl Repo {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        let started = Instant::now();
         let mut child = c.spawn().map_err(|e| spawn_error(e, args))?;
         let mut stdin = child.stdin.take().expect("piped stdin");
         // Write on a thread so large inputs can't deadlock against a full stdout pipe.
@@ -162,6 +166,7 @@ impl Repo {
         let writer = std::thread::spawn(move || stdin.write_all(&data));
         let out = child.wait_with_output()?;
         let _ = writer.join();
+        trace(args, started);
         check(&out, args, &[0])?;
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
@@ -294,7 +299,47 @@ fn spawn_error(e: std::io::Error, args: &[&str]) -> anyhow::Error {
 
 fn exec(mut c: Command, args: &[&str]) -> Result<Output> {
     c.stdout(Stdio::piped()).stderr(Stdio::piped());
-    c.output().map_err(|e| spawn_error(e, args))
+    let started = Instant::now();
+    let out = c.output().map_err(|e| spawn_error(e, args));
+    trace(args, started);
+    out
+}
+
+/// The git executable: `GITJET_GIT` when set (e.g. the real `git.exe` instead of a package
+/// manager shim, which costs an extra process per call on Windows), else `git` from PATH.
+pub fn git_program() -> &'static OsString {
+    static PROGRAM: OnceLock<OsString> = OnceLock::new();
+    PROGRAM.get_or_init(|| {
+        std::env::var_os("GITJET_GIT")
+            .filter(|p| !p.is_empty())
+            .unwrap_or_else(|| "git".into())
+    })
+}
+
+/// With `GITJET_TRACE=<file>`, append each git command and how long it took to `<file>`
+/// (to find what makes the UI slow; the terminal itself is busy drawing).
+fn trace(args: &[&str], started: Instant) {
+    static FILE: OnceLock<Option<Mutex<std::fs::File>>> = OnceLock::new();
+    let file = FILE.get_or_init(|| {
+        let path = std::env::var_os("GITJET_TRACE").filter(|p| !p.is_empty())?;
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .ok()
+            .map(Mutex::new)
+    });
+    if let Some(Ok(mut f)) = file.as_ref().map(Mutex::lock) {
+        let ms = started.elapsed().as_secs_f64() * 1000.0;
+        let thread = std::thread::current();
+        let on_ui = thread.name() == Some("main");
+        let _ = writeln!(
+            f,
+            "{ms:8.1} ms {} git {}",
+            if on_ui { "[UI]" } else { "[bg]" },
+            args.join(" ")
+        );
+    }
 }
 
 fn check(out: &Output, args: &[&str], ok_codes: &[i32]) -> Result<()> {

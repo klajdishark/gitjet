@@ -1,12 +1,12 @@
 #!/bin/sh
 # Install the gitjet binary on macOS or Linux.
-#   curl -fsSL https://github.com/klajdishark/gitjet/releases/latest/download/install.sh | sh
+#   curl -fsSL https://github.com/kashari/gitjet/releases/latest/download/install.sh | sh
 # Options (environment variables):
 #   GITJET_INSTALL_DIR  where to put the binary (default: ~/.local/bin)
 #   GITJET_VERSION      tag to install, e.g. v0.1.0 (default: latest)
 set -eu
 
-REPO="${GITJET_REPO:-klajdishark/gitjet}"
+REPO="${GITJET_REPO:-kashari/gitjet}"
 INSTALL_DIR="${GITJET_INSTALL_DIR:-$HOME/.local/bin}"
 
 os=$(uname -s)

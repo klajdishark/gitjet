@@ -205,7 +205,12 @@ fn continue_rebase(ctx: &Ctx) -> Action {
     if !rebase::is_rebasing(&ctx.repo) {
         return not_rebasing("Continue rebase");
     }
-    outcome_action(rebase::continue_rebase(&ctx.repo))
+    Action::run(
+        &ctx.repo,
+        "Continuing rebase",
+        rebase::continue_rebase,
+        outcome_action,
+    )
 }
 
 fn abort_rebase(ctx: &Ctx) -> Action {
@@ -225,7 +230,11 @@ fn abort_rebase(ctx: &Ctx) -> Action {
                  commits already rewritten and resolved conflicts are discarded.",
                 progress_suffix(&p)
             ),
-            |ctx| Action::from_result(rebase::abort(&ctx.repo), "Rebase aborted"),
+            |_| {
+                Action::spawn("Abort rebase", |repo| {
+                    rebase::abort(repo).map(|_| "Rebase aborted".into())
+                })
+            },
         )
         .danger(),
     )
@@ -251,7 +260,7 @@ fn skip_commit(ctx: &Ctx) -> Action {
         ConfirmPopup::new(
             "Skip commit",
             format!("Skip {which}?\n\nIts changes are left out of the rebased branch and the rebase goes on."),
-            |ctx| outcome_action(rebase::skip(&ctx.repo)),
+            |ctx| Action::run(&ctx.repo, "Skipping commit", rebase::skip, outcome_action),
         )
         .danger(),
     )

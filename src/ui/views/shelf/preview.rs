@@ -155,7 +155,8 @@ impl Popup for PatchPreviewPopup {
         let t = &ctx.theme;
         let r = centered_pct(area, 92, 90);
         f.render_widget(Clear, r);
-        let block = panel(format!(" Apply Patch: {} ", self.file.display()), true, t);
+        let block =
+            crate::ui::widgets::dialog(format!(" Apply Patch: {} ", self.file.display()), t);
         let inner = block.inner(r);
         f.render_widget(block, r);
         let subj_h = self.subjects.len().min(3) as u16;

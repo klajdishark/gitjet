@@ -197,12 +197,26 @@ the command line.
 
 ## Large repositories
 
-gitjet runs every git command off the screen thread, so keys and tab switches stay instant even
-when git is slow; data shows "Loading…" until it arrives. If loading itself takes long:
+gitjet loads tabs, previews and details off the screen thread, so keys and tab switches stay
+instant even when git is slow; a spinner in the status bar ("Loading Changes") and "Loading…" in
+the pane show that data is on its way. If loading itself takes long:
 
 - **Windows is slower at starting programs**: each git command costs 50–150 ms there, more with
   real-time antivirus scanning. Excluding your repositories and Git's install folder from
   scanning (if your security policy allows it) helps a lot.
+- **git through a shim** (Scoop, Chocolatey and similar): every git command then starts two
+  programs. Point gitjet at the real executable with the `GITJET_GIT` environment variable, for
+  example `GITJET_GIT=C:\Program Files\Git\cmd\git.exe`.
+- **Finding what is slow**: set `GITJET_TRACE` to a file name and gitjet appends every git
+  command it runs, with its duration and whether the screen waited for it (`[UI]`) or not
+  (`[bg]`):
+
+  ```text
+     133.2 ms [bg] git --no-optional-locks status --porcelain=v2 -z --branch --untracked-files=all
+     141.8 ms [UI] git --literal-pathspecs add -A --pathspec-from-file=- --pathspec-file-nul
+  ```
+
+  Please attach such a trace when reporting a performance problem.
 - **Many branches or a long history**: gitjet writes git's commit-graph cache in the background
   for large repositories (see `[performance]` in [Configuration](configuration.md)). You can also
   let Git keep it up to date itself:

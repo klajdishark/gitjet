@@ -55,6 +55,9 @@ pub fn checkout(ctx: &Ctx, b: &Branch) -> Action {
     if b.is_head {
         return Action::Toast(format!("Already on {}", b.name));
     }
+    if ctx.config.branches.checkout_from_remote {
+        return super::remote_checkout::open(ctx, b);
+    }
     if b.is_remote() {
         return checkout_remote(ctx, b);
     }
@@ -93,20 +96,26 @@ fn checkout_remote(ctx: &Ctx, b: &Branch) -> Action {
 
 /// Run a checkout; when local changes are in the way, offer smart / force checkout.
 pub fn run_checkout(ctx: &Ctx, target: CheckoutTarget) -> Action {
-    match target.run(&ctx.repo, false) {
-        Ok(()) => done(format!("Checked out {}", target.label())),
-        Err(e) => {
-            let msg = format!("{e:#}");
-            if branch::is_local_changes_error(&msg) {
-                local_changes_menu(target, msg)
-            } else {
-                fail(e)
+    let job_target = target.clone();
+    Action::run(
+        &ctx.repo,
+        format!("Checking out {}", target.label()),
+        move |repo| job_target.run(repo, false),
+        move |r| match r {
+            Ok(()) => done(format!("Checked out {}", target.label())),
+            Err(e) => {
+                let msg = format!("{e:#}");
+                if branch::is_local_changes_error(&msg) {
+                    local_changes_menu(target, msg)
+                } else {
+                    fail(e)
+                }
             }
-        }
-    }
+        },
+    )
 }
 
-fn local_changes_menu(target: CheckoutTarget, err: String) -> Action {
+pub(super) fn local_changes_menu(target: CheckoutTarget, err: String) -> Action {
     let label = target.label().to_string();
     let blockers = CheckoutBlockers::parse(&err);
     let mut items = Vec::new();
@@ -147,13 +156,16 @@ fn local_changes_menu(target: CheckoutTarget, err: String) -> Action {
     items.push(MenuItem::new(force_label, "f", move |_| {
         Action::popup(
             ConfirmPopup::new("Force checkout", confirm_msg, move |ctx| {
-                match target.run(&ctx.repo, true) {
-                    Ok(()) => done(format!(
-                        "Checked out {} (local changes discarded)",
-                        target.label()
-                    )),
-                    Err(e) => fail(e),
-                }
+                let label = target.label().to_string();
+                Action::run(
+                    &ctx.repo,
+                    format!("Force checking out {label}"),
+                    move |repo| target.run(repo, true),
+                    move |r| match r {
+                        Ok(()) => done(format!("Checked out {label} (local changes discarded)")),
+                        Err(e) => fail(e),
+                    },
+                )
             })
             .danger(),
         )
@@ -211,18 +223,28 @@ fn force_checkout_message(label: &str, b: &CheckoutBlockers) -> String {
 }
 
 fn smart_checkout(ctx: &Ctx, target: &CheckoutTarget) -> Action {
-    let label = target.label();
-    match branch::smart_checkout(&ctx.repo, target) {
-        Ok(SmartOutcome::Clean) => done(format!("Checked out {label} (local changes restored)")),
-        Ok(SmartOutcome::Conflicts) => Action::Batch(vec![
-            Action::Toast(format!(
-                "Checked out {label}; restoring local changes conflicted (they are kept in the stash)"
-            )),
-            Action::SwitchTab(Tab::Conflicts),
-            Action::Refresh,
-        ]),
-        Err(e) => fail(e),
-    }
+    let label = target.label().to_string();
+    let target = target.clone();
+    Action::run(
+        &ctx.repo,
+        format!("Smart checkout of {label} (stash, checkout, unstash)"),
+        move |repo| branch::smart_checkout(repo, &target),
+        move |r| {
+            match r {
+            Ok(SmartOutcome::Clean) => {
+                done(format!("Checked out {label} (local changes restored)"))
+            }
+            Ok(SmartOutcome::Conflicts) => Action::Batch(vec![
+                Action::Toast(format!(
+                    "Checked out {label}; restoring local changes conflicted (they are kept in the stash)"
+                )),
+                Action::SwitchTab(Tab::Conflicts),
+                Action::Refresh,
+            ]),
+            Err(e) => fail(e),
+        }
+        },
+    )
 }
 
 // ----- create / rename / delete --------------------------------------------------------------
@@ -246,17 +268,24 @@ pub fn rename(b: &Branch) -> Action {
         if new == old {
             return Action::None;
         }
-        match branch::rename_branch(&ctx.repo, &old, &new) {
-            Ok(()) => {
-                let mut fav = Favorites::load(&ctx.repo);
-                if fav.refs.remove(&format!("refs/heads/{old}")) {
-                    fav.refs.insert(format!("refs/heads/{new}"));
-                    let _ = fav.save(&ctx.repo);
+        let (o, n) = (old.clone(), new.clone());
+        Action::run(
+            &ctx.repo,
+            format!("Renaming {old} to {new}"),
+            move |repo| {
+                branch::rename_branch(repo, &o, &n)?;
+                let mut fav = Favorites::load(repo);
+                if fav.refs.remove(&format!("refs/heads/{o}")) {
+                    fav.refs.insert(format!("refs/heads/{n}"));
+                    let _ = fav.save(repo);
                 }
-                done(format!("Renamed {old} to {new}"))
-            }
-            Err(e) => fail(e),
-        }
+                Ok(())
+            },
+            move |r: anyhow::Result<()>| match r {
+                Ok(()) => done(format!("Renamed {old} to {new}")),
+                Err(e) => fail(e),
+            },
+        )
     });
     Action::popup(popup)
 }
@@ -282,26 +311,36 @@ pub fn delete(ctx: &Ctx, b: &Branch) -> Action {
         ));
     }
     let (name, short) = (b.name.clone(), b.short.clone());
-    match branch::delete_branch(&ctx.repo, &name, false) {
-        Ok(()) => done(format!("Deleted branch {name} (was {short})")),
-        Err(e) if branch::is_not_merged_error(&format!("{e:#}")) => {
-            let msg = format!(
-                "Branch '{name}' is not fully merged into the current branch.\nForce delete it? Its unmerged commits will only be reachable via the reflog (tip {short})."
-            );
-            Action::popup(
-                ConfirmPopup::new(
-                    "Force delete branch",
-                    msg,
-                    move |ctx| match branch::delete_branch(&ctx.repo, &name, true) {
-                        Ok(()) => done(format!("Deleted branch {name} (was {short})")),
-                        Err(e) => fail(e),
-                    },
+    let job_name = name.clone();
+    Action::run(
+        &ctx.repo,
+        format!("Deleting {name}"),
+        move |repo| branch::delete_branch(repo, &job_name, false),
+        move |r| match r {
+            Ok(()) => done(format!("Deleted branch {name} (was {short})")),
+            Err(e) if branch::is_not_merged_error(&format!("{e:#}")) => {
+                let msg = format!(
+                    "Branch '{name}' is not fully merged into the current branch.\nForce delete it? Its unmerged commits will only be reachable via the reflog (tip {short})."
+                );
+                Action::popup(
+                    ConfirmPopup::new("Force delete branch", msg, move |ctx| {
+                        let job_name = name.clone();
+                        Action::run(
+                            &ctx.repo,
+                            format!("Force deleting {name}"),
+                            move |repo| branch::delete_branch(repo, &job_name, true),
+                            move |r| match r {
+                                Ok(()) => done(format!("Deleted branch {name} (was {short})")),
+                                Err(e) => fail(e),
+                            },
+                        )
+                    })
+                    .danger(),
                 )
-                .danger(),
-            )
-        }
-        Err(e) => fail(e),
-    }
+            }
+            Err(e) => fail(e),
+        },
+    )
 }
 
 // ----- merge / rebase / compare --------------------------------------------------------------
@@ -316,7 +355,13 @@ pub fn merge_menu(ctx: &Ctx, name: &str) -> Action {
         .map(|(&mode, key)| {
             let name = name.to_string();
             MenuItem::new(mode.label(), key, move |ctx| {
-                integration(branch::merge(&ctx.repo, &name, mode), "Merge")
+                let job_name = name.clone();
+                Action::run(
+                    &ctx.repo,
+                    format!("Merging {name}"),
+                    move |repo| branch::merge(repo, &job_name, mode),
+                    |r| integration(r, "Merge"),
+                )
             })
         })
         .collect();
@@ -328,7 +373,13 @@ pub fn merge_menu(ctx: &Ctx, name: &str) -> Action {
 
 /// Rebase the current branch onto `name`.
 pub fn rebase_onto(ctx: &Ctx, name: &str) -> Action {
-    integration(branch::rebase_onto(&ctx.repo, name), "Rebase")
+    let job_name = name.to_string();
+    Action::run(
+        &ctx.repo,
+        format!("Rebasing onto {name}"),
+        move |repo| branch::rebase_onto(repo, &job_name),
+        |r| integration(r, "Rebase"),
+    )
 }
 
 /// Check out `name` and rebase it onto the current branch.
@@ -342,9 +393,12 @@ pub fn checkout_and_rebase(ctx: &Ctx, b: &Branch) -> Action {
         Some(o) => o,
         None => return Action::Error("No commits yet".into()),
     };
-    integration(
-        branch::checkout_and_rebase(&ctx.repo, &b.name, &onto),
-        "Rebase",
+    let name = b.name.clone();
+    Action::run(
+        &ctx.repo,
+        format!("Checking out {name} and rebasing onto {onto}"),
+        move |repo| branch::checkout_and_rebase(repo, &name, &onto),
+        |r| integration(r, "Rebase"),
     )
 }
 
@@ -383,10 +437,10 @@ pub fn upstream_menu(ctx: &Ctx, b: &Branch) -> Action {
             format!("Unset upstream (currently {up})"),
             "",
             move |ctx| {
-                Action::from_result(
-                    branch::unset_upstream(&ctx.repo, &local),
-                    format!("Unset upstream of {local}"),
-                )
+                let msg = format!("Unset upstream of {local}");
+                Action::run_op(&ctx.repo, "Unsetting upstream", msg, move |repo| {
+                    branch::unset_upstream(repo, &local)
+                })
             },
         ));
     }
@@ -399,10 +453,10 @@ pub fn upstream_menu(ctx: &Ctx, b: &Branch) -> Action {
             r.name.clone()
         };
         items.push(MenuItem::new(label, "", move |ctx| {
-            Action::from_result(
-                branch::set_upstream(&ctx.repo, &local, &r.name),
-                format!("{local} now tracks {}", r.name),
-            )
+            let msg = format!("{local} now tracks {}", r.name);
+            Action::run_op(&ctx.repo, "Setting upstream", msg, move |repo| {
+                branch::set_upstream(repo, &local, &r.name)
+            })
         }));
     }
     if items.is_empty() {

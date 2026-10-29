@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use crate::git::log::Commit;
@@ -168,10 +168,7 @@ fn when(ts: i64) -> String {
 pub fn info_lines(c: &Commit, d: &Details, refs: &RefIndex, t: &Theme) -> Vec<Line<'static>> {
     let mut out = vec![Line::from(vec![
         field("Commit", t),
-        Span::styled(
-            c.id.clone(),
-            Style::default().fg(t.hash).add_modifier(Modifier::BOLD),
-        ),
+        Span::styled(c.id.clone(), Style::default().fg(t.hash)),
     ])];
     let n = c.short.len().max(7);
     let parents: Vec<Span<'static>> = if c.parents.is_empty() {
@@ -238,10 +235,7 @@ pub fn info_lines(c: &Commit, d: &Details, refs: &RefIndex, t: &Theme) -> Vec<Li
     }
     let mut lines = d.message.lines();
     if let Some(subject) = lines.next() {
-        out.push(Line::styled(
-            subject.to_string(),
-            t.text().add_modifier(Modifier::BOLD),
-        ));
+        out.push(Line::styled(subject.to_string(), t.text()));
     }
     out.extend(lines.map(|l| Line::styled(l.to_string(), t.text())));
     if d.loading {
@@ -264,10 +258,7 @@ pub fn status_style(status: char, t: &Theme) -> Style {
 /// One row of the changed-files list.
 pub fn file_line(f: &ChangedFile, t: &Theme) -> Line<'static> {
     let mut spans = vec![
-        Span::styled(
-            format!("{} ", f.status),
-            status_style(f.status, t).add_modifier(Modifier::BOLD),
-        ),
+        Span::styled(format!("{} ", f.status), status_style(f.status, t)),
         Span::styled(f.path.clone(), t.text()),
     ];
     if let Some(old) = &f.old_path {

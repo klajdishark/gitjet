@@ -281,11 +281,7 @@ pub fn open_in_editor(ctx: &Ctx, path: &str, line: Option<usize>) -> Action {
     if !abs.exists() {
         return Action::Error(format!("{path} does not exist in the work tree"));
     }
-    Action::Suspend(crate::util::editor_command(
-        ctx.config.editor.as_deref(),
-        &abs,
-        line,
-    ))
+    Action::edit(abs, line)
 }
 
 /// Popup with the full details of one commit (hash, author, dates, refs, message, changed files).

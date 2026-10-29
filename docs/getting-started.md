@@ -23,7 +23,7 @@ gitjet is a single executable with no runtime dependencies besides Git.
 In PowerShell:
 
 ```powershell
-irm https://github.com/klajdishark/gitjet/releases/latest/download/install.ps1 | iex
+irm https://github.com/kashari/gitjet/releases/latest/download/install.ps1 | iex
 ```
 
 The script downloads `gitjet.exe` for your architecture (x64 or ARM64), checks its SHA-256
@@ -33,7 +33,7 @@ It needs no administrator rights. Open a new terminal afterwards so the new `PAT
 ### macOS and Linux
 
 ```bash
-curl -fsSL https://github.com/klajdishark/gitjet/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/kashari/gitjet/releases/latest/download/install.sh | sh
 ```
 
 The script picks the archive for your OS and CPU (x86_64 or arm64/aarch64), checks its SHA-256
@@ -53,17 +53,17 @@ Both scripts read these environment variables:
 Example:
 
 ```bash
-curl -fsSL https://github.com/klajdishark/gitjet/releases/latest/download/install.sh | GITJET_INSTALL_DIR=/usr/local/bin sh
+curl -fsSL https://github.com/kashari/gitjet/releases/latest/download/install.sh | GITJET_INSTALL_DIR=/usr/local/bin sh
 ```
 
 ```powershell
-$env:GITJET_VERSION = "v0.1.0"; irm https://github.com/klajdishark/gitjet/releases/latest/download/install.ps1 | iex
+$env:GITJET_VERSION = "v0.1.0"; irm https://github.com/kashari/gitjet/releases/latest/download/install.ps1 | iex
 ```
 
 ### Manual download
 
 Download the archive for your platform from the
-[releases page](https://github.com/klajdishark/gitjet/releases), unpack it, and put `gitjet`
+[releases page](https://github.com/kashari/gitjet/releases), unpack it, and put `gitjet`
 (`gitjet.exe` on Windows) somewhere on your `PATH`. Each archive has a matching `.sha256` file.
 
 | Platform | Archive |
@@ -84,7 +84,7 @@ if macOS or Windows blocks them.
 With Rust 1.80 or newer:
 
 ```bash
-cargo install --git https://github.com/klajdishark/gitjet
+cargo install --git https://github.com/kashari/gitjet
 ```
 
 ### Check the installation

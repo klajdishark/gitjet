@@ -585,11 +585,7 @@ impl DiffViewer {
 
     fn open_editor(&self, ctx: &Ctx) -> Action {
         match self.editor_target(ctx) {
-            Ok((path, line)) => Action::Suspend(util::editor_command(
-                ctx.config.editor.as_deref(),
-                &path,
-                Some(line),
-            )),
+            Ok((path, line)) => Action::edit(path, Some(line)),
             Err(e) => Action::error(format!("{e:#}")),
         }
     }
@@ -718,12 +714,8 @@ impl DiffViewer {
             )
             .enabled(self.diffs.len() > 1),
             self.cmd_item("Reload", "r", Cmd::Reload),
-            MenuItem::new("Open in editor", "o", move |ctx| match target {
-                Some((p, line)) => Action::Suspend(util::editor_command(
-                    ctx.config.editor.as_deref(),
-                    &p,
-                    Some(line),
-                )),
+            MenuItem::new("Open in editor", "o", move |_| match target {
+                Some((p, line)) => Action::edit(p, Some(line)),
                 None => Action::Toast("This file is not in the work tree".into()),
             })
             .enabled(ready),
@@ -1409,7 +1401,7 @@ mod tests {
         assert_eq!(line, 3);
         assert!(matches!(
             v.handle_key(key(KeyCode::Char('o')), &ctx),
-            Action::Suspend(_)
+            Action::Edit { .. }
         ));
         assert!(matches!(
             v.handle_key(key(KeyCode::Char('.')), &ctx),
@@ -1496,7 +1488,7 @@ mod tests {
         assert_eq!(v.file, 1);
         assert!(matches!(
             v.handle_key(key(KeyCode::Char('o')), &ctx),
-            Action::Suspend(_)
+            Action::Edit { .. }
         ));
         assert_eq!(v.editor_target(&ctx).unwrap().1, 2);
         v.handle_key(key(KeyCode::Char('[')), &ctx);
@@ -1507,13 +1499,13 @@ mod tests {
         v.handle_key(key(KeyCode::Char(']')), &ctx);
         assert!(matches!(
             v.handle_key(key(KeyCode::F(4)), &ctx),
-            Action::Suspend(_)
+            Action::Edit { .. }
         ));
         v.handle_key(key(KeyCode::Char('N')), &ctx);
         v.handle_key(key(KeyCode::Char('s')), &ctx);
         assert!(matches!(
             v.handle_key(key(KeyCode::Enter), &ctx),
-            Action::Suspend(_)
+            Action::Edit { .. }
         ));
     }
 

@@ -3,9 +3,10 @@
 //! Dialogs opened from the editor (message editor, context menu) talk back through a shared
 //! command queue ([`Inbox`]) that the editor drains before every draw and key press.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::time::Instant;
 
 use anyhow::Result;
 use ratatui::crossterm::event::{
@@ -58,6 +59,8 @@ pub struct RebaseEditor {
     inbox: Inbox,
     search: Option<TextInput>,
     query: String,
+    /// Set while the started rebase runs in the background; the editor ignores keys meanwhile.
+    running: Rc<Cell<Option<Instant>>>,
 }
 
 impl RebaseEditor {
@@ -91,6 +94,7 @@ impl RebaseEditor {
             inbox: Rc::new(RefCell::new(Vec::new())),
             search: None,
             query: String::new(),
+            running: Rc::new(Cell::new(None)),
         })
     }
 
@@ -298,7 +302,10 @@ impl RebaseEditor {
         }
         text.push_str("\n\nUncommitted changes are stashed and restored automatically.");
         let risky = !warnings.is_empty() || self.rows.iter().any(|r| r.action == TodoAction::Drop);
-        let popup = ConfirmPopup::new("Start rebase?", text, move |ctx| execute(ctx, &plan));
+        let running = self.running.clone();
+        let popup = ConfirmPopup::new("Start rebase?", text, move |ctx| {
+            execute(ctx, plan, running)
+        });
         Action::popup(if risky { popup.danger() } else { popup })
     }
 
@@ -436,12 +443,22 @@ impl RebaseEditor {
     }
 }
 
-/// Run the plan; on success close the editor, on refusal keep it open with the error.
-fn execute(ctx: &Ctx, plan: &RebasePlan) -> Action {
-    match rebase::start(&ctx.repo, plan, &Editors::production()) {
-        Ok(outcome) => Action::ClosePopup.then(super::outcome_action(Ok(outcome))),
-        Err(e) => Action::Error(format!("{e:#}")),
-    }
+/// Run the plan in the background; on success close the editor, on refusal keep it open with the
+/// error. `running` locks the editor meanwhile.
+fn execute(ctx: &Ctx, plan: RebasePlan, running: Rc<Cell<Option<Instant>>>) -> Action {
+    running.set(Some(Instant::now()));
+    Action::run(
+        &ctx.repo,
+        "Rebasing",
+        move |repo| rebase::start(repo, &plan, &Editors::production()),
+        move |r| {
+            running.set(None);
+            match r {
+                Ok(outcome) => Action::ClosePopup.then(super::outcome_action(Ok(outcome))),
+                Err(e) => Action::Error(format!("{e:#}")),
+            }
+        },
+    )
 }
 
 fn action_description(a: TodoAction) -> &'static str {
@@ -539,10 +556,7 @@ impl RebaseEditor {
             fit("SUBJECT", subject_w),
             fit("AUTHOR", author_w)
         );
-        f.render_widget(
-            Paragraph::new(head).style(t.dimmed().add_modifier(Modifier::BOLD)),
-            header,
-        );
+        f.render_widget(Paragraph::new(head).style(t.dimmed()), header);
         let h = area.height as usize;
         self.sel = self.sel.min(self.rows.len().saturating_sub(1));
         self.offset = scroll_to_keep_visible(self.sel, self.offset, h);
@@ -633,16 +647,24 @@ impl Popup for RebaseEditor {
         .areas(inner);
 
         let summary = rebase::summarize(&self.rows, &self.original_ids());
-        f.render_widget(
-            Line::from(vec![
+        let hint_line = match self.running.get() {
+            Some(started) => Line::styled(
+                format!(
+                    "{} Rebasing {}… (updating files, this can take a while)",
+                    crate::app::spinner_frame(started),
+                    self.branch
+                ),
+                Style::default().fg(t.accent),
+            ),
+            None => Line::from(vec![
                 Span::styled(
                     "Oldest commit at the top — git replays the list top to bottom.  ",
                     t.dimmed(),
                 ),
                 Span::styled(summary, Style::default().fg(t.accent)),
             ]),
-            hint,
-        );
+        };
+        f.render_widget(hint_line, hint);
         let mut note_lines: Vec<Line> = warnings
             .iter()
             .map(|w| Line::styled(format!("⚠ {w}"), Style::default().fg(t.warning)))
@@ -663,6 +685,9 @@ impl Popup for RebaseEditor {
 
     fn handle_key(&mut self, key: KeyEvent, ctx: &Ctx) -> Action {
         self.drain_inbox();
+        if self.running.get().is_some() {
+            return Action::None;
+        }
         if self.search.is_some() {
             return self.search_key(key);
         }

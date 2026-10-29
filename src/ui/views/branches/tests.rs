@@ -57,7 +57,31 @@ fn setup() -> (TempDir, TempDir, Ctx) {
     repo.run(&["fetch", "-q"]).unwrap();
     repo.run(&["branch", "feature/ü"]).unwrap();
     commit_files(&repo, &[("b.txt", "2\n")], "second commit");
-    (bare, d, Ctx::new(repo, Config::default()))
+    // Most tests check out local branches as they are; `from_remote` switches to the default.
+    let mut config = Config::default();
+    config.branches.checkout_from_remote = false;
+    (bare, d, Ctx::new(repo, config))
+}
+
+/// The same repository with `[branches] checkout_from_remote` on (the default).
+fn from_remote(ctx: &Ctx) -> Ctx {
+    Ctx::new(ctx.repo.clone(), Config::default())
+}
+
+/// Check out `name` from its remote and return what the progress dialog finishes with.
+fn checkout_from_remote(ctx: &Ctx, name: &str) -> Action {
+    let all = branch::list_branches(&ctx.repo).unwrap();
+    let b = all.iter().find(|b| b.name == name).unwrap();
+    let mut p = popup_of(ops::checkout(ctx, b)).expect("progress dialog");
+    p.poll(ctx)
+}
+
+fn toast_of(a: &Action) -> Option<String> {
+    match a {
+        Action::Toast(t) => Some(t.clone()),
+        Action::Batch(v) => v.iter().find_map(toast_of),
+        _ => None,
+    }
 }
 
 fn popup_of(a: Action) -> Option<Box<dyn Popup>> {
@@ -364,6 +388,23 @@ fn checkout_blocked_by_untracked_files_names_them() {
 }
 
 #[test]
+fn new_branch_from_remote_uses_local_name_without_upstream() {
+    let (_b, _d, ctx) = setup();
+    let all = branch::list_branches(&ctx.repo).unwrap();
+    let remote_only = all.iter().find(|b| b.name == "origin/remote-only").unwrap();
+    let mut nb = new_branch::NewBranchPopup::new(Some(remote_only));
+    let s = render_popup(&mut nb, &ctx, 100, 20);
+    assert!(s.contains("remote-only"), "{s}");
+    assert!(s.contains("Won't track origin/remote-only"), "{s}");
+    assert!(matches!(
+        nb.handle_key(key(KeyCode::Enter), &ctx),
+        Action::Batch(_)
+    ));
+    assert_eq!(ctx.repo.head_branch().as_deref(), Some("remote-only"));
+    assert!(crate::git::remote::upstream_of(&ctx.repo, "remote-only").is_none());
+}
+
+#[test]
 fn overwriting_a_branch_with_unique_commits_asks_first() {
     let (_b, _d, ctx) = setup();
     let repo = &ctx.repo;
@@ -388,11 +429,11 @@ fn overwriting_a_branch_with_unique_commits_asks_first() {
         Action::ClosePopup
     ));
     assert_eq!(repo.rev_parse("topic").unwrap(), old_tip);
+    // Declining left the dialog usable.
     let mut confirm = popup_of(nb.handle_key(key(KeyCode::Enter), &ctx)).expect("danger confirm");
-    assert!(matches!(
-        confirm.handle_key(key(KeyCode::Char('y')), &ctx),
-        Action::Batch(_)
-    ));
+    // Confirming closes the confirmation; the dialog then creates the branch and closes itself.
+    confirm.handle_key(key(KeyCode::Char('y')), &ctx);
+    assert!(matches!(nb.poll(&ctx), Action::Batch(_)));
     assert_eq!(
         repo.rev_parse("topic").unwrap(),
         repo.rev_parse("main").unwrap()
@@ -410,4 +451,95 @@ fn overwriting_a_branch_with_unique_commits_asks_first() {
         nb.handle_key(key(KeyCode::Enter), &ctx),
         Action::Batch(_)
     ));
+}
+
+#[test]
+fn checkout_from_remote_creates_the_local_branch() {
+    let (_b, _d, ctx) = setup();
+    let ctx = from_remote(&ctx);
+    let a = checkout_from_remote(&ctx, "origin/remote-only");
+    assert_eq!(
+        toast_of(&a).as_deref(),
+        Some("Checked out remote-only from origin/remote-only")
+    );
+    assert_eq!(ctx.repo.head_branch().as_deref(), Some("remote-only"));
+    let up = crate::git::remote::upstream_of(&ctx.repo, "remote-only").unwrap();
+    assert_eq!(up.short(), "origin/remote-only");
+}
+
+#[test]
+fn checkout_from_remote_fetches_and_moves_a_branch_that_is_behind() {
+    let (_b, _d, ctx) = setup();
+    let ctx = from_remote(&ctx);
+    let repo = &ctx.repo;
+    let first = repo.rev_parse("feature/ü").unwrap();
+    let second = repo.rev_parse("main").unwrap();
+    // The remote has feature/ü at the second commit, but the last fetch saw the first.
+    repo.run(&["push", "-q", "origin", "main:refs/heads/feature/ü"])
+        .unwrap();
+    repo.run(&["update-ref", "refs/remotes/origin/feature/ü", &first])
+        .unwrap();
+    let a = checkout_from_remote(&ctx, "feature/ü");
+    assert!(matches!(a, Action::Batch(_)));
+    assert_eq!(repo.head_branch().as_deref(), Some("feature/ü"));
+    assert_eq!(repo.head_commit().unwrap(), second, "fetched, then moved");
+    let up = crate::git::remote::upstream_of(repo, "feature/ü").unwrap();
+    assert_eq!(up.short(), "origin/feature/ü");
+}
+
+#[test]
+fn checkout_from_remote_asks_before_dropping_local_commits() {
+    let (_b, _d, ctx) = setup();
+    let ctx = from_remote(&ctx);
+    let repo = &ctx.repo;
+    let local_tip = repo.rev_parse("main").unwrap();
+    let remote_tip = repo.rev_parse("origin/main").unwrap();
+    repo.run(&["checkout", "-q", "feature/ü"]).unwrap();
+    // main is one commit ahead of origin/main: keeping it leaves it alone.
+    let mut menu = popup_of(checkout_from_remote(&ctx, "main")).expect("reset or keep menu");
+    let s = render_popup(menu.as_mut(), &ctx, 140, 20);
+    assert!(s.contains("main has 1 commit not on origin/main"), "{s}");
+    let mut keep = popup_of(menu.handle_key(key(KeyCode::Char('l')), &ctx)).unwrap();
+    assert!(matches!(keep.poll(&ctx), Action::Batch(_)));
+    assert_eq!(repo.head_branch().as_deref(), Some("main"));
+    assert_eq!(repo.head_commit().unwrap(), local_tip);
+    // Resetting takes the remote as it is.
+    repo.run(&["checkout", "-q", "feature/ü"]).unwrap();
+    let mut menu = popup_of(checkout_from_remote(&ctx, "main")).unwrap();
+    let mut reset = popup_of(menu.handle_key(key(KeyCode::Char('r')), &ctx)).unwrap();
+    assert!(matches!(reset.poll(&ctx), Action::Batch(_)));
+    assert_eq!(repo.head_branch().as_deref(), Some("main"));
+    assert_eq!(repo.head_commit().unwrap(), remote_tip);
+}
+
+#[test]
+fn checkout_from_remote_uses_last_fetched_state_when_offline() {
+    let (_b, _d, ctx) = setup();
+    let ctx = from_remote(&ctx);
+    ctx.repo
+        .run(&[
+            "remote",
+            "set-url",
+            "origin",
+            "/nonexistent/gitjet-test-remote",
+        ])
+        .unwrap();
+    let a = checkout_from_remote(&ctx, "origin/remote-only");
+    let toast = toast_of(&a).unwrap();
+    assert!(
+        toast.starts_with("Checked out remote-only from origin/remote-only"),
+        "{toast}"
+    );
+    assert!(toast.contains("could not fetch"), "{toast}");
+    assert_eq!(ctx.repo.head_branch().as_deref(), Some("remote-only"));
+}
+
+#[test]
+fn checkout_from_remote_checks_out_local_only_branches_as_they_are() {
+    let (_b, _d, ctx) = setup();
+    let ctx = from_remote(&ctx);
+    ctx.repo.run(&["branch", "local-only"]).unwrap();
+    let a = checkout_from_remote(&ctx, "local-only");
+    assert_eq!(toast_of(&a).as_deref(), Some("Checked out local-only"));
+    assert_eq!(ctx.repo.head_branch().as_deref(), Some("local-only"));
 }

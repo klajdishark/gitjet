@@ -9,7 +9,6 @@
 //!   so holding an arrow key loads only the item you stop on.
 //!
 //! In test builds jobs run inline, so tests can call `refresh()` and assert right away.
-#![allow(dead_code)] // remove once every view uses both helpers
 
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
@@ -166,6 +165,7 @@ impl<K: Clone + PartialEq + Send + 'static, T: Clone + Send + 'static> Preview<K
     }
 
     /// True while `key` has been requested but has not arrived yet.
+    #[allow(dead_code)] // used by tests; views track what they show themselves
     pub fn is_loading(&mut self, key: &K) -> bool {
         self.collect();
         self.requested.as_ref() == Some(key)

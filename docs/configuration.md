@@ -72,6 +72,9 @@ max_file_kb = 1024
 method = "rebase"         # "rebase" or "merge"
 prune = true
 
+[branches]
+checkout_from_remote = true
+
 [hosting]
 use_git_credentials = true
 
@@ -257,6 +260,12 @@ api_url = "https://bitbucket.example.net/rest/api/1.0"
 host = "mirror.example.com"
 kind = "none"
 ```
+
+### `[branches]`
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `checkout_from_remote` | bool | `true` | Checking out a branch takes it from the remote as-is. gitjet fetches that one branch, then creates or resets the local branch to it and sets it as the upstream. The remote branch is the local branch's upstream, else the branch of the same name on a remote (`origin` first). When the local branch has commits that are not on the remote, gitjet asks first: reset (the commits stay reachable through the reflog) or check out the local branch as it is. When the fetch fails (offline, authentication), the last fetched state is used and the toast says so. Branches that exist only locally are checked out as usual. Set to `false` to always check out local branches as they are. |
 
 ### `[performance]`
 

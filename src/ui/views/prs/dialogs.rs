@@ -457,13 +457,12 @@ impl Popup for TokenPopup {
         let t = &ctx.theme;
         let r = centered(area, 84, 10);
         f.render_widget(Clear, r);
-        let block = panel(
+        let block = crate::ui::widgets::dialog(
             format!(
                 " Sign in to {} ({}) ",
                 self.target.h.url.credential_host(),
                 self.target.h.kind.name()
             ),
-            true,
             t,
         );
         let inner = block.inner(r);
@@ -774,7 +773,7 @@ impl Popup for CreatePrPopup {
             self.target.noun(),
             self.target.h.display()
         );
-        let block = panel(title, true, t);
+        let block = crate::ui::widgets::dialog(title, t);
         let inner = block.inner(r);
         f.render_widget(block, r);
         let [info, title_row, base_row, draft_row, body_label, body, msg, keys] =

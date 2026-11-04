@@ -1,15 +1,15 @@
 {
-    "version": "0.1.9",
+    "version": "0.2.0",
     "description": "A keyboard-driven terminal Git client with IDE-grade features",
     "homepage": "https://github.com/klajdishark/gitjet",
     "license": "MIT",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/klajdishark/gitjet/releases/download/v0.1.9/gitjet-x86_64-pc-windows-msvc.zip",
+            "url": "https://github.com/klajdishark/gitjet/releases/download/v0.2.0/gitjet-x86_64-pc-windows-msvc.zip",
             "hash": "REPLACE_WITH_SHA256"
         },
         "arm64": {
-            "url": "https://github.com/klajdishark/gitjet/releases/download/v0.1.9/gitjet-aarch64-pc-windows-msvc.zip",
+            "url": "https://github.com/klajdishark/gitjet/releases/download/v0.2.0/gitjet-aarch64-pc-windows-msvc.zip",
             "hash": "REPLACE_WITH_SHA256"
         }
     },

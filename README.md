@@ -95,6 +95,21 @@ gitjet config-init     # write a config file with all defaults
 gitjet config-path     # show where the config file lives
 ```
 
+### Ask in plain English (AI builds)
+
+The `gitjet-ai-<platform>` downloads have a small model built in (about 300 MB; it runs on
+the CPU, offline):
+
+```bash
+gitjet ask "merge develop into uat and push"
+gitjet ask -n "cherry-pick 5c84679 onto deploy/uat"   # -n: show the plan only
+```
+
+gitjet matches every branch, commit and file name against the repository, shows the plan, and
+runs it only after you confirm (pushes to `prod`/`main` need the branch name typed). To build it
+yourself: `GITJET_MODEL=/path/to/model.gguf cargo build --release --features ai` (needs CMake
+and a C++ compiler).
+
 ### Keys
 
 Every screen lists its keys at the bottom; press `?` for the full list.

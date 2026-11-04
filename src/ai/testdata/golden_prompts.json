@@ -1,0 +1,1005 @@
+{
+ "prefix": "<start_of_turn>developer\nYou are a model that can do function calling with the following functions<start_function_declaration>declaration:new_branch{description:<escape>Create a branch from another branch and check it out.<escape>,parameters:{properties:{from:{description:<escape>Branch to start from; omit for the current branch<escape>,type:<escape>STRING<escape>},name:{description:<escape>Name as the user said it, with \"feature/\" in front when they call it a feature branch<escape>,type:<escape>STRING<escape>}},required:[<escape>name<escape>],type:<escape>OBJECT<escape>}}<end_function_declaration><start_function_declaration>declaration:merge{description:<escape>Merge a branch, tag or commit into a branch (default: the current branch).<escape>,parameters:{properties:{into:{description:<escape>Branch to merge into; omit for the current branch<escape>,type:<escape>STRING<escape>},mode:{description:<escape>Merge strategy; omit for git's default<escape>,enum:[<escape>default<escape>,<escape>no_ff<escape>,<escape>squash<escape>,<escape>ff_only<escape>],type:<escape>STRING<escape>},on_conflict:{description:<escape>If it conflicts: \"abort\" (cancel, reject), \"theirs\" or \"ours\" (take that side); omit to stop and resolve by hand<escape>,enum:[<escape>abort<escape>,<escape>ours<escape>,<escape>theirs<escape>],type:<escape>STRING<escape>},push:{description:<escape>True when the user also asks to push the result<escape>,type:<escape>BOOLEAN<escape>},source:{description:<escape>What to merge, as the user said it: a branch name, a hash, or words from a commit message<escape>,type:<escape>STRING<escape>}},required:[<escape>source<escape>],type:<escape>OBJECT<escape>}}<end_function_declaration><start_function_declaration>declaration:cherry_pick{description:<escape>Copy commits onto a branch: by hash, by author and message words, or from a list.<escape>,parameters:{properties:{author:{description:<escape>Only commits by this author (\"me\" for the current user)<escape>,type:<escape>STRING<escape>},commits:{description:<escape>Commit hashes exactly as the user typed them; omit to pick from a list<escape>,items:{type:<escape>STRING<escape>},type:<escape>ARRAY<escape>},from:{description:<escape>Branch the commits are on, to list the ones missing from the target<escape>,type:<escape>STRING<escape>},message:{description:<escape>Words from the commit message, as the user quoted them<escape>,type:<escape>STRING<escape>},onto:{description:<escape>Branch to put the commits on; omit for the current branch<escape>,type:<escape>STRING<escape>},push:{description:<escape>True when the user also asks to push the result<escape>,type:<escape>BOOLEAN<escape>}},type:<escape>OBJECT<escape>}}<end_function_declaration><start_function_declaration>declaration:resolve_conflicts{description:<escape>Resolve conflicted files by taking our side or their side wholesale.<escape>,parameters:{properties:{paths:{description:<escape>Files to resolve; omit for every conflicted file<escape>,items:{type:<escape>STRING<escape>},type:<escape>ARRAY<escape>},side:{description:<escape>\"ours\" = the current branch's version (yours, mine); \"theirs\" = the incoming one<escape>,enum:[<escape>ours<escape>,<escape>theirs<escape>],type:<escape>STRING<escape>}},required:[<escape>side<escape>],type:<escape>OBJECT<escape>}}<end_function_declaration><start_function_declaration>declaration:switch{description:<escape>Check out a branch.<escape>,parameters:{properties:{branch:{description:<escape>Branch as the user said it<escape>,type:<escape>STRING<escape>}},required:[<escape>branch<escape>],type:<escape>OBJECT<escape>}}<end_function_declaration><start_function_declaration>declaration:fetch{description:<escape>Fetch all remotes; your own branches don't change.<escape>,parameters:{type:<escape>OBJECT<escape>}}<end_function_declaration><start_function_declaration>declaration:pull{description:<escape>Pull a branch from its remote (default: the current branch).<escape>,parameters:{properties:{branch:{description:<escape>Branch to update; omit for the current branch<escape>,type:<escape>STRING<escape>}},type:<escape>OBJECT<escape>}}<end_function_declaration><start_function_declaration>declaration:push{description:<escape>Push a branch to its remote (never a force push).<escape>,parameters:{properties:{branch:{description:<escape>Branch to push; omit for the current branch<escape>,type:<escape>STRING<escape>}},type:<escape>OBJECT<escape>}}<end_function_declaration><start_function_declaration>declaration:find_commits{description:<escape>Find commits by author, message words, date range, path or branch.<escape>,parameters:{properties:{author:{description:<escape>Author name or e-mail as the user said it (\"me\" for the current user)<escape>,type:<escape>STRING<escape>},branch:{description:<escape>Branch to look on; omit for the current branch<escape>,type:<escape>STRING<escape>},message:{description:<escape>Words to search for in commit messages<escape>,type:<escape>STRING<escape>},not_in:{description:<escape>Only commits not yet on this branch<escape>,type:<escape>STRING<escape>},path:{description:<escape>Only commits that touch this file or folder<escape>,type:<escape>STRING<escape>},since:{description:<escape>Start date as the user said it, e.g. \"last monday\", \"2026-01-01\"<escape>,type:<escape>STRING<escape>},until:{description:<escape>End date as the user said it<escape>,type:<escape>STRING<escape>}},type:<escape>OBJECT<escape>}}<end_function_declaration><start_function_declaration>declaration:clarify{description:<escape>Ask one question when the request is ambiguous or missing a branch, file or commit.<escape>,parameters:{properties:{question:{description:<escape>One short question<escape>,type:<escape>STRING<escape>}},required:[<escape>question<escape>],type:<escape>OBJECT<escape>}}<end_function_declaration><start_function_declaration>declaration:unsupported{description:<escape>The request is not a git task gitjet can do.<escape>,parameters:{properties:{reason:{description:<escape>Why, in a few words<escape>,type:<escape>STRING<escape>}},required:[<escape>reason<escape>],type:<escape>OBJECT<escape>}}<end_function_declaration><end_of_turn>\n",
+ "cases": [
+  {
+   "request": "create a new branch named feature/remove-face-id from deploy/prod on the remote",
+   "turn": "<start_of_turn>user\ncreate a new branch named feature/remove-face-id from deploy/prod on the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>feature/remove-face-id<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "new branch named feature/remove-face-id, base deploy/prod on the remote",
+   "turn": "<start_of_turn>user\nnew branch named feature/remove-face-id, base deploy/prod on the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>feature/remove-face-id<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "push to remote this new branch",
+   "turn": "<start_of_turn>user\npush to remote this new branch<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:push{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "switch to deploy/prod",
+   "turn": "<start_of_turn>user\nswitch to deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>deploy/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "checkout to deploy/prod",
+   "turn": "<start_of_turn>user\ncheckout to deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>deploy/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge main into deploy/prod",
+   "turn": "<start_of_turn>user\nmerge main into deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/prod<escape>,source:<escape>main<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge main from the remote to deploy/prod",
+   "turn": "<start_of_turn>user\nmerge main from the remote to deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/prod<escape>,source:<escape>origin/main<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "move to deploy/uat",
+   "turn": "<start_of_turn>user\nmove to deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "now let's move to deploy/uat",
+   "turn": "<start_of_turn>user\nnow let's move to deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "after merging deploy/prod on the remote to deploy/uat, then push",
+   "turn": "<start_of_turn>user\nafter merging deploy/prod on the remote to deploy/uat, then push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/uat<escape>,push:true,source:<escape>origin/deploy/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "new branch feature/base-log-addition from deploy/prod on the remote",
+   "turn": "<start_of_turn>user\nnew branch feature/base-log-addition from deploy/prod on the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>feature/base-log-addition<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "push this branch to remote",
+   "turn": "<start_of_turn>user\npush this branch to remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:push{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "move to feature/uat-merge from the remote",
+   "turn": "<start_of_turn>user\nmove to feature/uat-merge from the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>feature/uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "after fetching, move to feature/uat-merge",
+   "turn": "<start_of_turn>user\nafter fetching, move to feature/uat-merge<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>feature/uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring deploy/uat from the remote into feature/uat-merge",
+   "turn": "<start_of_turn>user\nbring deploy/uat from the remote into feature/uat-merge<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>feature/uat-merge<escape>,source:<escape>origin/deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring from remote feature/base-log-addition into feature/uat-merge, then push",
+   "turn": "<start_of_turn>user\nbring from remote feature/base-log-addition into feature/uat-merge, then push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>feature/uat-merge<escape>,push:true,source:<escape>origin/feature/base-log-addition<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "move to deploy/uat",
+   "turn": "<start_of_turn>user\nmove to deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge uat-merge to deploy/uat, then push",
+   "turn": "<start_of_turn>user\nmerge uat-merge to deploy/uat, then push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/uat<escape>,push:true,source:<escape>uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring feature/uat-merge into deploy/uat, push",
+   "turn": "<start_of_turn>user\nbring feature/uat-merge into deploy/uat, push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/uat<escape>,push:true,source:<escape>feature/uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "let's move to deply/prod",
+   "turn": "<start_of_turn>user\nlet's move to deply/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>deply/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "let's move to deploy/prod",
+   "turn": "<start_of_turn>user\nlet's move to deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>deploy/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring remote branch of deploy/uat into deploy/prod",
+   "turn": "<start_of_turn>user\nbring remote branch of deploy/uat into deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/prod<escape>,source:<escape>origin/deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring the remote changes from prod into the local branch",
+   "turn": "<start_of_turn>user\nbring the remote changes from prod into the local branch<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:pull{branch:<escape>prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "pull deploy/prod",
+   "turn": "<start_of_turn>user\npull deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:pull{branch:<escape>deploy/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "update this branch with the remote changes",
+   "turn": "<start_of_turn>user\nupdate this branch with the remote changes<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:pull{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "push to deploy/prod",
+   "turn": "<start_of_turn>user\npush to deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:push{branch:<escape>deploy/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "what should i do about conflicts?",
+   "turn": "<start_of_turn>user\nwhat should i do about conflicts?<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "push to deploy prod",
+   "turn": "<start_of_turn>user\npush to deploy prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:push{branch:<escape>deploy prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring cherry commit 3f9a2c1",
+   "turn": "<start_of_turn>user\nbring cherry commit 3f9a2c1<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>3f9a2c1<escape>]}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring cherry commit 8be41d07 into deploy/uat",
+   "turn": "<start_of_turn>user\nbring cherry commit 8be41d07 into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>8be41d07<escape>],onto:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring cherry commit a71c3e9 to uat, then push",
+   "turn": "<start_of_turn>user\nbring cherry commit a71c3e9 to uat, then push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>a71c3e9<escape>],onto:<escape>uat<escape>,push:true}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring cherry commits 4d2e8f1 and 9c0b7a3 into deploy/uat",
+   "turn": "<start_of_turn>user\nbring cherry commits 4d2e8f1 and 9c0b7a3 into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>4d2e8f1<escape>,<escape>9c0b7a3<escape>],onto:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring commit by me where i put comment 'add actuator health endpoint'",
+   "turn": "<start_of_turn>user\nbring commit by me where i put comment 'add actuator health endpoint'<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,message:<escape>add actuator health endpoint<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring commit by me where i put comment 'fix jwt expiry check' into deploy/uat",
+   "turn": "<start_of_turn>user\nbring commit by me where i put comment 'fix jwt expiry check' into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,message:<escape>fix jwt expiry check<escape>,onto:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring commit by me where i put comment 'kafka retry backoff', then push",
+   "turn": "<start_of_turn>user\nbring commit by me where i put comment 'kafka retry backoff', then push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,message:<escape>kafka retry backoff<escape>,push:true}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring commit by me where i put comment 'flyway v3 migration' to uat and push",
+   "turn": "<start_of_turn>user\nbring commit by me where i put comment 'flyway v3 migration' to uat and push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,message:<escape>flyway v3 migration<escape>,onto:<escape>uat<escape>,push:true}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "after fetching, bring cherry commit 6e1f0b2 into deploy/uat",
+   "turn": "<start_of_turn>user\nafter fetching, bring cherry commit 6e1f0b2 into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>6e1f0b2<escape>],onto:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "let's bring cherry commit c4a9d18 to deploy/prod",
+   "turn": "<start_of_turn>user\nlet's bring cherry commit c4a9d18 to deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>c4a9d18<escape>],onto:<escape>deploy/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring the commit i made with comment 'remove face id from login' into uat",
+   "turn": "<start_of_turn>user\nbring the commit i made with comment 'remove face id from login' into uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,message:<escape>remove face id from login<escape>,onto:<escape>uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring my commit where i wrote 'base log addition' into deploy/uat",
+   "turn": "<start_of_turn>user\nbring my commit where i wrote 'base log addition' into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,message:<escape>base log addition<escape>,onto:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring commit by me with comment \"update swagger config\"",
+   "turn": "<start_of_turn>user\nbring commit by me with comment \"update swagger config\"<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,message:<escape>update swagger config<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring cherry commit 2b7d5e3 onto feature/uat-merge",
+   "turn": "<start_of_turn>user\nbring cherry commit 2b7d5e3 onto feature/uat-merge<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>2b7d5e3<escape>],onto:<escape>feature/uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring cherry commit 0f3c6a9 into uat-merge then push",
+   "turn": "<start_of_turn>user\nbring cherry commit 0f3c6a9 into uat-merge then push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>0f3c6a9<escape>],onto:<escape>uat-merge<escape>,push:true}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "cherry pick 7a8b9c0 into deploy/uat",
+   "turn": "<start_of_turn>user\ncherry pick 7a8b9c0 into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>7a8b9c0<escape>],onto:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "cherry-pick 5e4d3c2 and 1a2b3c4 to uat",
+   "turn": "<start_of_turn>user\ncherry-pick 5e4d3c2 and 1a2b3c4 to uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>5e4d3c2<escape>,<escape>1a2b3c4<escape>],onto:<escape>uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "cherry pick my commits from feature/jwt-refresh-token into deploy/uat",
+   "turn": "<start_of_turn>user\ncherry pick my commits from feature/jwt-refresh-token into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,from:<escape>feature/jwt-refresh-token<escape>,onto:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "cherry pick my commits from feature/kafka-consumer-retry on the remote to uat",
+   "turn": "<start_of_turn>user\ncherry pick my commits from feature/kafka-consumer-retry on the remote to uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,from:<escape>origin/feature/kafka-consumer-retry<escape>,onto:<escape>uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring my commits from feature/actuator-health into deploy/uat",
+   "turn": "<start_of_turn>user\nbring my commits from feature/actuator-health into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,from:<escape>feature/actuator-health<escape>,onto:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring cherry commit 9f8e7d6 here",
+   "turn": "<start_of_turn>user\nbring cherry commit 9f8e7d6 here<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>9f8e7d6<escape>]}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring commit by me where i put comment 'user profile endpoint' here",
+   "turn": "<start_of_turn>user\nbring commit by me where i put comment 'user profile endpoint' here<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,message:<escape>user profile endpoint<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring commit by arben where he put comment 'fix null pointer in payment'",
+   "turn": "<start_of_turn>user\nbring commit by arben where he put comment 'fix null pointer in payment'<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>arben<escape>,message:<escape>fix null pointer in payment<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring arben's commit with comment 'cache user roles' into deploy/uat",
+   "turn": "<start_of_turn>user\nbring arben's commit with comment 'cache user roles' into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>arben<escape>,message:<escape>cache user roles<escape>,onto:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "cherry pick commits by arben from feature/role-cache onto uat",
+   "turn": "<start_of_turn>user\ncherry pick commits by arben from feature/role-cache onto uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>arben<escape>,from:<escape>feature/role-cache<escape>,onto:<escape>uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "cherry pick from feature/payment-refactor onto deploy/uat, i'll pick the commits",
+   "turn": "<start_of_turn>user\ncherry pick from feature/payment-refactor onto deploy/uat, i'll pick the commits<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{from:<escape>feature/payment-refactor<escape>,onto:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring cherry commit d3e2f1a0 into deploy/uat and push",
+   "turn": "<start_of_turn>user\nbring cherry commit d3e2f1a0 into deploy/uat and push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>d3e2f1a0<escape>],onto:<escape>deploy/uat<escape>,push:true}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "cherry-pick 4c5d6e7 here and push",
+   "turn": "<start_of_turn>user\ncherry-pick 4c5d6e7 here and push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>4c5d6e7<escape>],push:true}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring cherry commit 8a7b6c5 into the uat branch",
+   "turn": "<start_of_turn>user\nbring cherry commit 8a7b6c5 into the uat branch<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>8a7b6c5<escape>],onto:<escape>uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring commit by me where i put comment 'bump spring boot to 3.3' into deploy/uat, then push",
+   "turn": "<start_of_turn>user\nbring commit by me where i put comment 'bump spring boot to 3.3' into deploy/uat, then push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,message:<escape>bump spring boot to 3.3<escape>,onto:<escape>deploy/uat<escape>,push:true}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "pick 1f2e3d4 onto deploy/prod",
+   "turn": "<start_of_turn>user\npick 1f2e3d4 onto deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>1f2e3d4<escape>],onto:<escape>deploy/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring cherry commit b5a4c3d2 to feature/uat-merge",
+   "turn": "<start_of_turn>user\nbring cherry commit b5a4c3d2 to feature/uat-merge<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>b5a4c3d2<escape>],onto:<escape>feature/uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring commit by me where i put comment 'logback json layout' to uat-merge",
+   "turn": "<start_of_turn>user\nbring commit by me where i put comment 'logback json layout' to uat-merge<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,message:<escape>logback json layout<escape>,onto:<escape>uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "cherry pick 3c2b1a0 9d8c7b6 e5f4a3b into deploy/uat",
+   "turn": "<start_of_turn>user\ncherry pick 3c2b1a0 9d8c7b6 e5f4a3b into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{commits:[<escape>3c2b1a0<escape>,<escape>9d8c7b6<escape>,<escape>e5f4a3b<escape>],onto:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring commit by me where i put comment 'face id cleanup' into deploy/uat and push",
+   "turn": "<start_of_turn>user\nbring commit by me where i put comment 'face id cleanup' into deploy/uat and push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:cherry_pick{author:<escape>me<escape>,message:<escape>face id cleanup<escape>,onto:<escape>deploy/uat<escape>,push:true}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge feature/jwt-refresh-token into feature/uat-merge",
+   "turn": "<start_of_turn>user\nmerge feature/jwt-refresh-token into feature/uat-merge<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>feature/uat-merge<escape>,source:<escape>feature/jwt-refresh-token<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring feature/actuator-health from the remote into feature/uat-merge, then push",
+   "turn": "<start_of_turn>user\nbring feature/actuator-health from the remote into feature/uat-merge, then push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>feature/uat-merge<escape>,push:true,source:<escape>origin/feature/actuator-health<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring feature/uat-merge into deploy/uat, if there are conflicts accept all theirs",
+   "turn": "<start_of_turn>user\nbring feature/uat-merge into deploy/uat, if there are conflicts accept all theirs<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/uat<escape>,on_conflict:<escape>theirs<escape>,source:<escape>feature/uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge uat-merge into deploy/uat and push, but abort if there are conflicts",
+   "turn": "<start_of_turn>user\nmerge uat-merge into deploy/uat and push, but abort if there are conflicts<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/uat<escape>,on_conflict:<escape>abort<escape>,push:true,source:<escape>uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring remote branch of deploy/prod into deploy/uat, keep ours on conflicts",
+   "turn": "<start_of_turn>user\nbring remote branch of deploy/prod into deploy/uat, keep ours on conflicts<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/uat<escape>,on_conflict:<escape>ours<escape>,source:<escape>origin/deploy/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge release/1.1.2 into deploy/uat",
+   "turn": "<start_of_turn>user\nmerge release/1.1.2 into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/uat<escape>,source:<escape>release/1.1.2<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge release/1.1.2 into deploy/prod, then push",
+   "turn": "<start_of_turn>user\nmerge release/1.1.2 into deploy/prod, then push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/prod<escape>,push:true,source:<escape>release/1.1.2<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring hotfix/1.1.1.1 into deploy/prod and push",
+   "turn": "<start_of_turn>user\nbring hotfix/1.1.1.1 into deploy/prod and push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/prod<escape>,push:true,source:<escape>hotfix/1.1.1.1<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge hotfix/1.1.1.1 from the remote into deploy/uat",
+   "turn": "<start_of_turn>user\nmerge hotfix/1.1.1.1 from the remote into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/uat<escape>,source:<escape>origin/hotfix/1.1.1.1<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "after fetching, merge develop on the remote into feature/uat-merge",
+   "turn": "<start_of_turn>user\nafter fetching, merge develop on the remote into feature/uat-merge<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>feature/uat-merge<escape>,source:<escape>origin/develop<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "let's bring deploy/uat into deploy/prod",
+   "turn": "<start_of_turn>user\nlet's bring deploy/uat into deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/prod<escape>,source:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge feature/kafka-consumer-retry into develop with a merge commit",
+   "turn": "<start_of_turn>user\nmerge feature/kafka-consumer-retry into develop with a merge commit<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>develop<escape>,mode:<escape>no_ff<escape>,source:<escape>feature/kafka-consumer-retry<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "squash merge feature/swagger-docs into develop",
+   "turn": "<start_of_turn>user\nsquash merge feature/swagger-docs into develop<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>develop<escape>,mode:<escape>squash<escape>,source:<escape>feature/swagger-docs<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge deploy/prod from the remote to develop, reject if there are conflicts",
+   "turn": "<start_of_turn>user\nmerge deploy/prod from the remote to develop, reject if there are conflicts<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>develop<escape>,on_conflict:<escape>abort<escape>,source:<escape>origin/deploy/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring origin/feature/base-log-addition into uat-merge",
+   "turn": "<start_of_turn>user\nbring origin/feature/base-log-addition into uat-merge<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>uat-merge<escape>,source:<escape>origin/feature/base-log-addition<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge feature/remove-face-id into feature/uat-merge, accept all ours if there are conflicts",
+   "turn": "<start_of_turn>user\nmerge feature/remove-face-id into feature/uat-merge, accept all ours if there are conflicts<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>feature/uat-merge<escape>,on_conflict:<escape>ours<escape>,source:<escape>feature/remove-face-id<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge release/1.1.3 to deploy/prod only if there are no conflicts",
+   "turn": "<start_of_turn>user\nmerge release/1.1.3 to deploy/prod only if there are no conflicts<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/prod<escape>,on_conflict:<escape>abort<escape>,source:<escape>release/1.1.3<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring the remote deploy/uat into feature/uat-merge, then push",
+   "turn": "<start_of_turn>user\nbring the remote deploy/uat into feature/uat-merge, then push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>feature/uat-merge<escape>,push:true,source:<escape>origin/deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge develop here",
+   "turn": "<start_of_turn>user\nmerge develop here<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{source:<escape>develop<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge feature/flyway-migration-v3",
+   "turn": "<start_of_turn>user\nmerge feature/flyway-migration-v3<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{source:<escape>feature/flyway-migration-v3<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge feature/uat-merge into uat",
+   "turn": "<start_of_turn>user\nmerge feature/uat-merge into uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>uat<escape>,source:<escape>feature/uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring release/1.1.2 from the remote into deploy/prod, if there are conflicts take theirs, then push",
+   "turn": "<start_of_turn>user\nbring release/1.1.2 from the remote into deploy/prod, if there are conflicts take theirs, then push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/prod<escape>,on_conflict:<escape>theirs<escape>,push:true,source:<escape>origin/release/1.1.2<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge deploy/uat into feature/uat-merge, cancel if it conflicts",
+   "turn": "<start_of_turn>user\nmerge deploy/uat into feature/uat-merge, cancel if it conflicts<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>feature/uat-merge<escape>,on_conflict:<escape>abort<escape>,source:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge feature/user-profile-endpoint into uat-merge and push",
+   "turn": "<start_of_turn>user\nmerge feature/user-profile-endpoint into uat-merge and push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>uat-merge<escape>,push:true,source:<escape>feature/user-profile-endpoint<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring feature/payment-refactor into feature/uat-merge, on conflicts use theirs",
+   "turn": "<start_of_turn>user\nbring feature/payment-refactor into feature/uat-merge, on conflicts use theirs<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>feature/uat-merge<escape>,on_conflict:<escape>theirs<escape>,source:<escape>feature/payment-refactor<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge hotfix/1.1.2.1 into deploy/prod and push it",
+   "turn": "<start_of_turn>user\nmerge hotfix/1.1.2.1 into deploy/prod and push it<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>deploy/prod<escape>,push:true,source:<escape>hotfix/1.1.2.1<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge prod back into develop",
+   "turn": "<start_of_turn>user\nmerge prod back into develop<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>develop<escape>,source:<escape>prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring deploy/prod on the remote into develop, then push",
+   "turn": "<start_of_turn>user\nbring deploy/prod on the remote into develop, then push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>develop<escape>,push:true,source:<escape>origin/deploy/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge feature/jwt-refresh-token into feature/uat-merge, if there are conflicts keep mine",
+   "turn": "<start_of_turn>user\nmerge feature/jwt-refresh-token into feature/uat-merge, if there are conflicts keep mine<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:merge{into:<escape>feature/uat-merge<escape>,on_conflict:<escape>ours<escape>,source:<escape>feature/jwt-refresh-token<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch release/1.1.2 from origin/deploy/prod",
+   "turn": "<start_of_turn>user\ncreate a new branch release/1.1.2 from origin/deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>release/1.1.2<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch hotfix/1.1.1.1 from origin/deploy/prod",
+   "turn": "<start_of_turn>user\ncreate a new branch hotfix/1.1.1.1 from origin/deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>hotfix/1.1.1.1<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch release/1.1.3 from deploy/prod on the remote",
+   "turn": "<start_of_turn>user\ncreate a new branch release/1.1.3 from deploy/prod on the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>release/1.1.3<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "new branch hotfix/1.1.2 from origin/deploy/prod",
+   "turn": "<start_of_turn>user\nnew branch hotfix/1.1.2 from origin/deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>hotfix/1.1.2<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "after fetching, create a new branch release/1.2.0 from origin/deploy/prod",
+   "turn": "<start_of_turn>user\nafter fetching, create a new branch release/1.2.0 from origin/deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>release/1.2.0<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch named feature/jwt-refresh-token from deploy/prod on the remote",
+   "turn": "<start_of_turn>user\ncreate a new branch named feature/jwt-refresh-token from deploy/prod on the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>feature/jwt-refresh-token<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "new branch feature/actuator-health from develop on the remote",
+   "turn": "<start_of_turn>user\nnew branch feature/actuator-health from develop on the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/develop<escape>,name:<escape>feature/actuator-health<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch named feature/kafka-consumer-retry, base origin/develop",
+   "turn": "<start_of_turn>user\ncreate a new branch named feature/kafka-consumer-retry, base origin/develop<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/develop<escape>,name:<escape>feature/kafka-consumer-retry<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "let's create a new branch hotfix/1.1.3.1 from origin/deploy/prod",
+   "turn": "<start_of_turn>user\nlet's create a new branch hotfix/1.1.3.1 from origin/deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>hotfix/1.1.3.1<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch release/1.1.4 from origin/feature/uat-merge",
+   "turn": "<start_of_turn>user\ncreate a new branch release/1.1.4 from origin/feature/uat-merge<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/feature/uat-merge<escape>,name:<escape>release/1.1.4<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "new branch feature/swagger-docs from deploy/prod",
+   "turn": "<start_of_turn>user\nnew branch feature/swagger-docs from deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>deploy/prod<escape>,name:<escape>feature/swagger-docs<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create branch feature/user-profile-endpoint",
+   "turn": "<start_of_turn>user\ncreate branch feature/user-profile-endpoint<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{name:<escape>feature/user-profile-endpoint<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch hotfix/1.1.2.2 from deploy/uat on the remote",
+   "turn": "<start_of_turn>user\ncreate a new branch hotfix/1.1.2.2 from deploy/uat on the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/uat<escape>,name:<escape>hotfix/1.1.2.2<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "new branch release/1.2.1 from the remote deploy/prod",
+   "turn": "<start_of_turn>user\nnew branch release/1.2.1 from the remote deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>release/1.2.1<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new feature branch for payment refactor from origin/develop",
+   "turn": "<start_of_turn>user\ncreate a new feature branch for payment refactor from origin/develop<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/develop<escape>,name:<escape>feature/payment refactor<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch named feature/flyway-migration-v3 from origin/deploy/prod",
+   "turn": "<start_of_turn>user\ncreate a new branch named feature/flyway-migration-v3 from origin/deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>feature/flyway-migration-v3<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch hotfix/1.1.4 from release/1.1.4",
+   "turn": "<start_of_turn>user\ncreate a new branch hotfix/1.1.4 from release/1.1.4<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>release/1.1.4<escape>,name:<escape>hotfix/1.1.4<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "make a new branch feature/role-cache off deploy/prod on the remote",
+   "turn": "<start_of_turn>user\nmake a new branch feature/role-cache off deploy/prod on the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>feature/role-cache<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch release/1.3.0 from origin/deploy/prod and switch to it",
+   "turn": "<start_of_turn>user\ncreate a new branch release/1.3.0 from origin/deploy/prod and switch to it<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>release/1.3.0<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "new branch feature/logback-json from origin/deploy/prod",
+   "turn": "<start_of_turn>user\nnew branch feature/logback-json from origin/deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>feature/logback-json<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch named hotfix/1.2.0.1 from deploy/prod on the remote",
+   "turn": "<start_of_turn>user\ncreate a new branch named hotfix/1.2.0.1 from deploy/prod on the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>hotfix/1.2.0.1<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create the branch release/1.1.5 from origin/deploy/prod please",
+   "turn": "<start_of_turn>user\ncreate the branch release/1.1.5 from origin/deploy/prod please<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>release/1.1.5<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "new branch feature/remove-face-id-tests from feature/remove-face-id",
+   "turn": "<start_of_turn>user\nnew branch feature/remove-face-id-tests from feature/remove-face-id<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>feature/remove-face-id<escape>,name:<escape>feature/remove-face-id-tests<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch hotfix/1.1.5 from origin/deploy/prod",
+   "turn": "<start_of_turn>user\ncreate a new branch hotfix/1.1.5 from origin/deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/deploy/prod<escape>,name:<escape>hotfix/1.1.5<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "start a new branch feature/health-check-cleanup from origin/develop",
+   "turn": "<start_of_turn>user\nstart a new branch feature/health-check-cleanup from origin/develop<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:new_branch{from:<escape>origin/develop<escape>,name:<escape>feature/health-check-cleanup<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "show my commits on develop that are not in deploy/uat",
+   "turn": "<start_of_turn>user\nshow my commits on develop that are not in deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{author:<escape>me<escape>,branch:<escape>develop<escape>,not_in:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "my commits on feature/uat-merge not in uat",
+   "turn": "<start_of_turn>user\nmy commits on feature/uat-merge not in uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{author:<escape>me<escape>,branch:<escape>feature/uat-merge<escape>,not_in:<escape>uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "what's on deploy/uat that isn't in deploy/prod yet",
+   "turn": "<start_of_turn>user\nwhat's on deploy/uat that isn't in deploy/prod yet<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{branch:<escape>deploy/uat<escape>,not_in:<escape>deploy/prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "which commits of feature/jwt-refresh-token are missing from uat-merge",
+   "turn": "<start_of_turn>user\nwhich commits of feature/jwt-refresh-token are missing from uat-merge<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{branch:<escape>feature/jwt-refresh-token<escape>,not_in:<escape>uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "find the commit with comment 'add actuator health endpoint'",
+   "turn": "<start_of_turn>user\nfind the commit with comment 'add actuator health endpoint'<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{message:<escape>add actuator health endpoint<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "find my commit where i put comment 'kafka retry backoff'",
+   "turn": "<start_of_turn>user\nfind my commit where i put comment 'kafka retry backoff'<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{author:<escape>me<escape>,message:<escape>kafka retry backoff<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "commits by arben since last monday",
+   "turn": "<start_of_turn>user\ncommits by arben since last monday<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{author:<escape>arben<escape>,since:<escape>last monday<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "my commits since yesterday morning",
+   "turn": "<start_of_turn>user\nmy commits since yesterday morning<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{author:<escape>me<escape>,since:<escape>yesterday morning<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "who changed application.yml last week",
+   "turn": "<start_of_turn>user\nwho changed application.yml last week<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{path:<escape>application.yml<escape>,since:<escape>last week<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "commits touching pom.xml since friday",
+   "turn": "<start_of_turn>user\ncommits touching pom.xml since friday<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{path:<escape>pom.xml<escape>,since:<escape>friday<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "what did arben push to deploy/uat this week",
+   "turn": "<start_of_turn>user\nwhat did arben push to deploy/uat this week<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{author:<escape>arben<escape>,branch:<escape>deploy/uat<escape>,since:<escape>this week<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "show the commits on release/1.1.2",
+   "turn": "<start_of_turn>user\nshow the commits on release/1.1.2<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{branch:<escape>release/1.1.2<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "what changed in src/main/resources/application-uat.yml",
+   "turn": "<start_of_turn>user\nwhat changed in src/main/resources/application-uat.yml<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{path:<escape>src/main/resources/application-uat.yml<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "commits between 2026-10-01 and 2026-10-15",
+   "turn": "<start_of_turn>user\ncommits between 2026-10-01 and 2026-10-15<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{since:<escape>2026-10-01<escape>,until:<escape>2026-10-15<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "find the commits about face id on develop",
+   "turn": "<start_of_turn>user\nfind the commits about face id on develop<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:find_commits{branch:<escape>develop<escape>,message:<escape>face id<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "accept all theirs",
+   "turn": "<start_of_turn>user\naccept all theirs<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:resolve_conflicts{side:<escape>theirs<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "accept all ours",
+   "turn": "<start_of_turn>user\naccept all ours<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:resolve_conflicts{side:<escape>ours<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "take theirs for application-uat.yml",
+   "turn": "<start_of_turn>user\ntake theirs for application-uat.yml<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:resolve_conflicts{paths:[<escape>application-uat.yml<escape>],side:<escape>theirs<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "keep mine for pom.xml",
+   "turn": "<start_of_turn>user\nkeep mine for pom.xml<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:resolve_conflicts{paths:[<escape>pom.xml<escape>],side:<escape>ours<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "accept theirs on everything",
+   "turn": "<start_of_turn>user\naccept theirs on everything<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:resolve_conflicts{side:<escape>theirs<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "keep our version for all the conflicted files",
+   "turn": "<start_of_turn>user\nkeep our version for all the conflicted files<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:resolve_conflicts{side:<escape>ours<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "take their changes for SecurityConfig.java and application.yml",
+   "turn": "<start_of_turn>user\ntake their changes for SecurityConfig.java and application.yml<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:resolve_conflicts{paths:[<escape>SecurityConfig.java<escape>,<escape>application.yml<escape>],side:<escape>theirs<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "resolve the conflicts with theirs",
+   "turn": "<start_of_turn>user\nresolve the conflicts with theirs<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:resolve_conflicts{side:<escape>theirs<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "use the incoming version everywhere",
+   "turn": "<start_of_turn>user\nuse the incoming version everywhere<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:resolve_conflicts{side:<escape>theirs<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "keep my side for devops/configuration.yaml",
+   "turn": "<start_of_turn>user\nkeep my side for devops/configuration.yaml<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:resolve_conflicts{paths:[<escape>devops/configuration.yaml<escape>],side:<escape>ours<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "accept all incoming changes",
+   "turn": "<start_of_turn>user\naccept all incoming changes<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:resolve_conflicts{side:<escape>theirs<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "go with ours for every conflict",
+   "turn": "<start_of_turn>user\ngo with ours for every conflict<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:resolve_conflicts{side:<escape>ours<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "move to feature/jwt-refresh-token",
+   "turn": "<start_of_turn>user\nmove to feature/jwt-refresh-token<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>feature/jwt-refresh-token<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "move to release/1.1.2 from the remote",
+   "turn": "<start_of_turn>user\nmove to release/1.1.2 from the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>release/1.1.2<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "let's move to develop",
+   "turn": "<start_of_turn>user\nlet's move to develop<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>develop<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "go back to deploy/uat",
+   "turn": "<start_of_turn>user\ngo back to deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "checkout to uat-merge",
+   "turn": "<start_of_turn>user\ncheckout to uat-merge<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "move to hotfix/1.1.1.1",
+   "turn": "<start_of_turn>user\nmove to hotfix/1.1.1.1<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:switch{branch:<escape>hotfix/1.1.1.1<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "push this branch",
+   "turn": "<start_of_turn>user\npush this branch<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:push{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "push release/1.1.2 to the remote",
+   "turn": "<start_of_turn>user\npush release/1.1.2 to the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:push{branch:<escape>release/1.1.2<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "push to deploy/uat",
+   "turn": "<start_of_turn>user\npush to deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:push{branch:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "push the new hotfix branch",
+   "turn": "<start_of_turn>user\npush the new hotfix branch<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:push{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "push feature/jwt-refresh-token",
+   "turn": "<start_of_turn>user\npush feature/jwt-refresh-token<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:push{branch:<escape>feature/jwt-refresh-token<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "push my changes to the remote",
+   "turn": "<start_of_turn>user\npush my changes to the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:push{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "pull deploy/uat",
+   "turn": "<start_of_turn>user\npull deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:pull{branch:<escape>deploy/uat<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "update develop with the remote changes",
+   "turn": "<start_of_turn>user\nupdate develop with the remote changes<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:pull{branch:<escape>develop<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring the remote changes into this branch",
+   "turn": "<start_of_turn>user\nbring the remote changes into this branch<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:pull{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "pull the latest feature/uat-merge",
+   "turn": "<start_of_turn>user\npull the latest feature/uat-merge<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:pull{branch:<escape>feature/uat-merge<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "get the latest from the remote for this branch",
+   "turn": "<start_of_turn>user\nget the latest from the remote for this branch<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:pull{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "pull latest on prod",
+   "turn": "<start_of_turn>user\npull latest on prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:pull{branch:<escape>prod<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "fetch everything from the remote",
+   "turn": "<start_of_turn>user\nfetch everything from the remote<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:fetch{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "fetch the latest from origin",
+   "turn": "<start_of_turn>user\nfetch the latest from origin<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:fetch{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "let's fetch first",
+   "turn": "<start_of_turn>user\nlet's fetch first<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:fetch{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "do a fetch on all remotes",
+   "turn": "<start_of_turn>user\ndo a fetch on all remotes<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:fetch{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "refresh the remotes",
+   "turn": "<start_of_turn>user\nrefresh the remotes<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:fetch{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "fetch, i want to see the new branches",
+   "turn": "<start_of_turn>user\nfetch, i want to see the new branches<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:fetch{}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring a cherry commit into uat",
+   "turn": "<start_of_turn>user\nbring a cherry commit into uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring commit by me into deploy/uat",
+   "turn": "<start_of_turn>user\nbring commit by me into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new branch release from origin/deploy/prod",
+   "turn": "<start_of_turn>user\ncreate a new branch release from origin/deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "cut the release for tomorrow",
+   "turn": "<start_of_turn>user\ncut the release for tomorrow<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge the feature into deploy/uat",
+   "turn": "<start_of_turn>user\nmerge the feature into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge release/1.1.4 into deploy/uat, then into deploy/prod",
+   "turn": "<start_of_turn>user\nmerge release/1.1.4 into deploy/uat, then into deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge it and push",
+   "turn": "<start_of_turn>user\nmerge it and push<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "move to the branch",
+   "turn": "<start_of_turn>user\nmove to the branch<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring it into uat",
+   "turn": "<start_of_turn>user\nbring it into uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create a new hotfix",
+   "turn": "<start_of_turn>user\ncreate a new hotfix<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "merge feature/uat-merge into deploy/uat, if there are conflicts",
+   "turn": "<start_of_turn>user\nmerge feature/uat-merge into deploy/uat, if there are conflicts<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "push and then merge into prod",
+   "turn": "<start_of_turn>user\npush and then merge into prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "bring the commit with my fix",
+   "turn": "<start_of_turn>user\nbring the commit with my fix<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "do the release",
+   "turn": "<start_of_turn>user\ndo the release<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "new branch from origin/deploy/prod",
+   "turn": "<start_of_turn>user\nnew branch from origin/deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "cherry pick into deploy/uat",
+   "turn": "<start_of_turn>user\ncherry pick into deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "create the hotfix branch from origin/deploy/prod",
+   "turn": "<start_of_turn>user\ncreate the hotfix branch from origin/deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:clarify{question:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "force push deploy/uat",
+   "turn": "<start_of_turn>user\nforce push deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "delete feature/jwt-refresh-token",
+   "turn": "<start_of_turn>user\ndelete feature/jwt-refresh-token<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "reset deploy/uat to origin/deploy/uat",
+   "turn": "<start_of_turn>user\nreset deploy/uat to origin/deploy/uat<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "rebase my branch onto develop",
+   "turn": "<start_of_turn>user\nrebase my branch onto develop<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "stash my changes before switching",
+   "turn": "<start_of_turn>user\nstash my changes before switching<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "tag release 1.1.2",
+   "turn": "<start_of_turn>user\ntag release 1.1.2<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "commit my changes with message 'fix login'",
+   "turn": "<start_of_turn>user\ncommit my changes with message 'fix login'<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "revert the last merge on deploy/prod",
+   "turn": "<start_of_turn>user\nrevert the last merge on deploy/prod<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "how do i undo a merge?",
+   "turn": "<start_of_turn>user\nhow do i undo a merge?<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "what's the difference between theirs and ours?",
+   "turn": "<start_of_turn>user\nwhat's the difference between theirs and ours?<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "write the release notes for 1.1.2",
+   "turn": "<start_of_turn>user\nwrite the release notes for 1.1.2<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "restart the uat server",
+   "turn": "<start_of_turn>user\nrestart the uat server<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "run the tests",
+   "turn": "<start_of_turn>user\nrun the tests<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "drop the last commit",
+   "turn": "<start_of_turn>user\ndrop the last commit<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  },
+  {
+   "request": "delete the remote branch feature/old-login",
+   "turn": "<start_of_turn>user\ndelete the remote branch feature/old-login<end_of_turn>\n<start_of_turn>model\n",
+   "completion": "<start_function_call>call:unsupported{reason:<escape>-<escape>}<end_function_call><start_function_response>"
+  }
+ ]
+}

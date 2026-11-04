@@ -615,10 +615,24 @@ pub enum Integration {
 
 /// Merge `branch` into the current branch.
 pub fn merge(repo: &Repo, branch: &str, mode: MergeMode) -> Result<Integration> {
+    merge_with(repo, branch, mode, None)
+}
+
+/// [`merge`] with a strategy option for conflicting hunks: `Some("ours")` / `Some("theirs")`
+/// (`-X ours` / `-X theirs`).
+pub fn merge_with(
+    repo: &Repo,
+    branch: &str,
+    mode: MergeMode,
+    strategy_option: Option<&str>,
+) -> Result<Integration> {
     let current = repo.head_branch().unwrap_or_else(|| "HEAD".into());
     let before = repo.head_commit();
     let mut args = vec!["merge", "--no-edit", "--autostash"];
     args.extend(mode.flag());
+    if let Some(x) = strategy_option {
+        args.extend(["-X", x]);
+    }
     args.push(branch);
     match repo.run(&args) {
         Ok(out) => {

@@ -7,6 +7,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-03
+
+### Added
+
+- `gitjet ask "<request>"`: describe a git task in plain English ("merge develop into uat and
+  push", "bring commit by me where i put comment 'fix login' into uat", "create a new branch
+  release/1.1.1 from origin/deploy/prod") and gitjet does it. A small model (FunctionGemma 270M,
+  fine-tuned for gitjet's tools) runs inside the binary on the CPU: no Python, no server, no
+  network.
+  - The model only picks the action. Every branch, commit and file it names is checked against
+    the repository first ("uat" is `deploy/uat`, "deply/prod" is `deploy/prod`); anything
+    unknown or ambiguous stops with a question before anything changes.
+  - The plan is shown and runs only after `y`; a push to a `prod`, `main` or `master` branch
+    needs the branch name typed. `-n` / `--dry-run` shows the plan only.
+  - Merge (with "on conflicts take theirs / keep ours / cancel"), cherry-pick by hash or by
+    author and message words, new branch, switch, fetch, pull, push, resolve conflicts, and
+    find commits. A new `release/x.y.z` or `hotfix/x.y.z(.N)` branch also sets that version in
+    `devops/configuration.yaml` and commits it.
+  - Built with `--features ai` and the model file (`GITJET_MODEL=/path/model.gguf`); the
+    release publishes these as `gitjet-ai-<platform>` archives when the model is configured.
+    The regular downloads are unchanged and don't include it.
+
 ## [0.1.9] - 2026-11-01
 
 This release merges the performance work and features from the fork at kashari/gitjet
@@ -262,7 +284,8 @@ Initial release.
 - Repository switcher for the parent repository, worktrees, submodules, nested and recent
   repositories; clone and init from inside the app.
 
-[Unreleased]: https://github.com/klajdishark/gitjet/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/kashari/gitjet/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kashari/gitjet/releases/tag/v0.2.0
 [0.1.9]: https://github.com/klajdishark/gitjet/compare/v0.1.1...v0.1.9
 [0.1.8]: https://github.com/kashari/gitjet/releases/tag/v0.1.8
 [0.1.7]: https://github.com/kashari/gitjet/releases/tag/v0.1.7

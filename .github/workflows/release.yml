@@ -66,11 +66,81 @@ jobs:
           path: |
             gitjet-${{ matrix.target }}.*
 
+  # The same binaries with the AI model compiled in (gitjet ask, ~300 MB each). The model is
+  # downloaded from the URL in the repository variable GITJET_MODEL_URL and checked against
+  # GITJET_MODEL_SHA256 before it goes into the binary.
+  build-ai:
+    name: Build AI ${{ matrix.target }}
+    if: vars.GITJET_MODEL_URL != ''
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, archive: zip }
+          - { os: macos-latest, target: aarch64-apple-darwin, archive: tar.gz }
+          - { os: macos-latest, target: x86_64-apple-darwin, archive: tar.gz }
+          # glibc, not musl: llama.cpp is C++. 22.04 keeps the glibc requirement at 2.35.
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, archive: tar.gz }
+          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu, archive: tar.gz }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ai-${{ matrix.target }}
+      - name: Download the model
+        shell: bash
+        run: |
+          name="$(basename "${{ vars.GITJET_MODEL_URL }}")"
+          curl -fsSL -o "$RUNNER_TEMP/$name" "${{ vars.GITJET_MODEL_URL }}"
+          # Hash from stdin: on Windows, sha256sum escapes the backslashed path and prefixes the hash with "\".
+          got=$( (sha256sum 2>/dev/null || shasum -a 256) < "$RUNNER_TEMP/$name" | cut -d' ' -f1)
+          test "$got" = "${{ vars.GITJET_MODEL_SHA256 }}" || { echo "model checksum mismatch: $got"; exit 1; }
+          echo "GITJET_MODEL=$RUNNER_TEMP/$name" >> "$GITHUB_ENV"
+      - name: Build
+        run: cargo build --release --locked --features ai --target ${{ matrix.target }}
+      - name: Smoke test
+        if: "!contains(matrix.target, 'x86_64-apple')"
+        shell: bash
+        # The model must load and answer; -n runs nothing in the checkout.
+        run: |
+          target/${{ matrix.target }}/release/gitjet ask -n "fetch all remotes" 2>&1 | tee ask.txt
+          grep -q "^model: fetch" ask.txt
+      - name: Package (zip)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $name = "gitjet-ai-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/gitjet.exe" "dist/gitjet.exe"
+          Copy-Item README.md, LICENSE dist/
+          Compress-Archive -Path dist/* -DestinationPath "$name.zip" -Force
+          (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLower() + "  $name.zip" | Out-File -Encoding ascii "$name.zip.sha256"
+      - name: Package (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          name="gitjet-ai-${{ matrix.target }}"
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/gitjet" dist/
+          cp README.md LICENSE dist/
+          tar -C dist -czf "$name.tar.gz" .
+          if command -v sha256sum >/dev/null; then sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"; else shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gitjet-ai-${{ matrix.target }}
+          path: |
+            gitjet-ai-${{ matrix.target }}.*
+
   release:
     name: Publish release
-    needs: build
+    needs: [build, build-ai]
+    # Publish even when there is no model configured (build-ai skipped).
+    if: always() && needs.build.result == 'success' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
